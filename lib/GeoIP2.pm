@@ -4,11 +4,11 @@ unit class GeoIP2;
 # can be turned  on and off at any time
 has Bool $.debug is rw;
 
+# database informations
+has %.metadata;
+
 # *.mmdb file decriptor
 has IO::Handle $!handle;
-
-# metadata with database informations
-has %.metadata;
 
 class X::DatabasePathInvalid is Exception is export { };
 class X::DatabaseMetaDataNotFound is Exception is export { };
@@ -173,9 +173,7 @@ method !decode-map ( Int:D :$size ) returns Hash {
     
     for ^$size {
         my $key = self!decode( );
-        self!debug( :$key ) if $.debug;
         my $value = self!decode( );
-        self!debug( :$value ) if $.debug;
         %out{ $key } = $value;
     }
 
