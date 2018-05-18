@@ -1,5 +1,7 @@
 unit class GeoIP2;
 
+use experimental :pack;
+
 # debug flag,
 # can be turned  on and off at any time
 has Bool $.debug is rw;
@@ -10,22 +12,23 @@ has %.metadata;
 # *.mmdb file decriptor
 has IO::Handle $!handle;
 
-class X::DatabasePathInvalid is Exception is export { };
-class X::DatabaseMetaDataNotFound is Exception is export { };
+class X::PathInvalid is Exception is export { };
+class X::MetaDataNotFound is Exception is export { };
+class X::NodeIndexOutOfRange is Exception is export { };
 
 submethod BUILD ( Str:D :$path!, :$!debug = False ) {
     
-    X::DatabasePathInvalid.new.throw( ) unless $path.IO ~~ :e & :f & :r;
+    X::PathInvalid.new.throw( ) unless $path.IO ~~ :e & :f & :r;
     
     $!handle = open( $path, :bin );
     
     # extract metdata to confirm file is valid-ish
-    self!find-metadata( );
+    self!read-metadata( );
     
 }
 
 #| extract metadata information
-method !find-metadata {
+method !read-metadata {
 
     # constant sequence of bytes that separates IP data from metadata
     state $metadata-marker = Buf.new( 0xAB, 0xCD, 0xEF ) ~ 'MaxMind.com'.encode;
@@ -36,7 +39,7 @@ method !find-metadata {
         FIRST $!handle.seek( 0, SeekFromEnd );
         
         # check if BOF is reached before marker is found
-        X::DatabaseMetaDataNotFound.new.throw unless $!handle.tell > 0;
+        X::MetaDataNotFound.new.throw unless $!handle.tell > 0;
         
         # read one byte backwards
         $!handle.seek( -1, SeekFromCurrent );
@@ -53,13 +56,70 @@ method !find-metadata {
         $!handle.seek( -$metadata-marker.elems, SeekFromCurrent );
     }
     
-    %.metadata = self!decode( );
+    # decode metadata section into map structure
+    %!metadata = self!decode( );
+    
+    # precalculate derived values
+    %!metadata{ 'node_byte_size' } = ( %!metadata{ 'record_size' } * 2 / 8 ).Int;
+    %!metadata{ 'search_tree_size' } = %!metadata{ 'node_count' } * %!metadata{ 'node_byte_size' };
+    if %!metadata{ 'ip_version' } == 4 {
+        %!metadata{ 'ipv4_start_node' } = 0;
+    }
+    else {
+        my $index = 0;
+        # for IPv4 in IPv6 subnet /96 contains 0s
+        # so left node branch should be traversed 96 times
+        for ^96 {
+            ( $index,  ) = self.read-node( :$index );
+            last if $index >= %!metadata{ 'node_count' };
+        }
+        %!metadata{ 'ipv4_start_node' } = $index;
+    }
+}
+
+method read-node ( Int:D :$index! ) {
+    
+    # negative or too big index cannot be requested
+    X::NodeIndexOutOfRange.new( message => $index ).throw( )
+        unless 0 <= $index < %!metadata{ 'node_count' };
+
+    # position cursor at the beginnig of node index
+    $!handle.seek( $index * %.metadata{ 'node_byte_size' }, SeekFromBeginning );
+    
+    # read all index bytes
+    my $bytes = $!handle.read( %.metadata{ 'node_byte_size' } );
+    
+    # medium database,
+    # most important bits of both pointers are stored in middle byte
+    if %.metadata{ 'record_size' } == 28 {
+
+        # extract left side bits 27...24 from middle byte
+        my $left-pointer = $bytes[ 3 ] +> 4;
+        # merge with left side bits 23...16, 15...8 and 7...0
+        for 0..2 {
+            $left-pointer +<= 8;
+            $left-pointer +|= $bytes[ $_ ];
+        }
+        
+        # extract right side bits 27...24 from middle byte
+        my $right-pointer = $bytes[ 3 ] +& 0x0F;
+        # merge with right side bits 23...16, 15...8 and 7...0
+        for 4..6 {
+            $right-pointer +<= 8;
+            $right-pointer +|= $bytes[ $_ ];
+        }
+
+        self!debug( :$left-pointer, :$right-pointer ) if $.debug;
+        
+        return $left-pointer, $right-pointer;
+    }
+    else {
+       die "Record size " ~ %.metadata{ 'record_size' } ~ " NYI!";
+    }
 }
 
 #| decode value at current handle position
 method !decode {
-    
-    use experimental :pack;
     
     # TODO: type names are meaningless,
     # numeric values can be mapped directly to decoding methods
@@ -88,7 +148,7 @@ method !decode {
     ;
     
     # first byte is control byte
-    my $control-byte = $!handle.read( 1 ).unpack( 'C' );
+    my $control-byte = $!handle.read( 1 )[ 0 ];
     
     # first 3 bits of control byte describe container type
     my $type = %types{ $control-byte +> 5 };
@@ -97,12 +157,12 @@ method !decode {
     # extended type will map to type described by next byte
     if $type eq 'extended' {
         # TODO: add protection against unknown extended type
-        my $next-byte = $!handle.read( 1 ).unpack( 'C' );
+        my $next-byte = $!handle.read( 1 )[ 0 ];
         $type = %types{ $next-byte + 7 };
         self!debug( :$type ) if $.debug;
     }
     
-    my $size = self!decode-size( $control-byte );
+    my $size = self!decode-size( :$control-byte );
     self!debug( :$size ) if $.debug;
     
     given $type {
@@ -116,7 +176,7 @@ method !decode {
 }
 
 #| check how big is next data chunk
-method !decode-size ( $control-byte ) returns Int {
+method !decode-size ( Int :$control-byte! ) returns Int {
 
     # last 5 bits of control byte describe container size
     my $size = $control-byte +& 0b00011111;
@@ -126,7 +186,7 @@ method !decode-size ( $control-byte ) returns Int {
 
     # size is stored in next bytes
     if ( $size == 29 ) {
-        return 29 + $!handle.read( 1 ).unpack( 'C' );
+        return 29 + $!handle.read( 1 )[ 0 ];
     }
     
     die "Size $size NYI!";
@@ -141,23 +201,23 @@ method !decode-size ( $control-byte ) returns Int {
     # return ( $size, $offset + $bytes_to_read );
 }
 
-method !decode-uint ( Int:D :$size ) returns Int {
+method !decode-uint ( Int:D :$size! ) returns Int {
     my $out = 0;
 
     for ^$size {
         $out +<= 8;
-        $out +|= $!handle.read( 1 ).unpack( 'C' );
+        $out +|= $!handle.read( 1 )[ 0 ];
     }
     
     return $out;
 }
 
-method !decode-string ( Int:D :$size ) returns Str {
+method !decode-string ( Int:D :$size! ) returns Str {
     
     return $!handle.read( $size ).decode( );
 }
 
-method !decode-array ( Int:D :$size ) returns Array {
+method !decode-array ( Int:D :$size! ) returns Array {
     my @out;
     
     for ^$size {
@@ -168,7 +228,7 @@ method !decode-array ( Int:D :$size ) returns Array {
     return @out;
 }
 
-method !decode-map ( Int:D :$size ) returns Hash {
+method !decode-map ( Int:D :$size! ) returns Hash {
     my %out;
     
     for ^$size {
