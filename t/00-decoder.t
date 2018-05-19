@@ -33,7 +33,7 @@ my %expected_metadata = (
     'record_size' => 28,
     'search_tree_size' => 10017
 );
-is-deeply $geo.metadata, %expected_metadata, 'metadata';
+is-deeply $geo.metadata, %expected_metadata, 'metadata with derived fields';
 
 is-deeply $geo.read-node( index => 0 ), ( 1, 1422 ), 'node 0 pointers ( node, node )';
 is-deeply $geo.read-node( index => 1024 ), ( 10139, 1431 ), 'node 1024 pointers ( data, missing )';

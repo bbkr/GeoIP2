@@ -23,12 +23,28 @@ submethod BUILD ( Str:D :$path!, :$!debug = False ) {
     $!handle = open( $path, :bin );
     
     # extract metdata to confirm file is valid-ish
-    self!read-metadata( );
+    %!metadata = self.read-metadata( );
     
+    # precalculate derived values
+    %!metadata{ 'node_byte_size' } = ( %!metadata{ 'record_size' } * 2 / 8 ).Int;
+    %!metadata{ 'search_tree_size' } = %!metadata{ 'node_count' } * %!metadata{ 'node_byte_size' };
+    if %!metadata{ 'ip_version' } == 4 {
+        %!metadata{ 'ipv4_start_node' } = 0;
+    }
+    else {
+        my $index = 0;
+        # for IPv4 in IPv6 subnet /96 contains 0s
+        # so left node branch should be traversed 96 times
+        for ^96 {
+            ( $index,  ) = self.read-node( :$index );
+            last if $index >= %!metadata{ 'node_count' };
+        }
+        %!metadata{ 'ipv4_start_node' } = $index;
+    }
 }
 
 #| extract metadata information
-method !read-metadata {
+method read-metadata ( ) returns Hash {
 
     # constant sequence of bytes that separates IP data from metadata
     state $metadata-marker = Buf.new( 0xAB, 0xCD, 0xEF ) ~ 'MaxMind.com'.encode;
@@ -57,26 +73,10 @@ method !read-metadata {
     }
     
     # decode metadata section into map structure
-    %!metadata = self!decode( );
-    
-    # precalculate derived values
-    %!metadata{ 'node_byte_size' } = ( %!metadata{ 'record_size' } * 2 / 8 ).Int;
-    %!metadata{ 'search_tree_size' } = %!metadata{ 'node_count' } * %!metadata{ 'node_byte_size' };
-    if %!metadata{ 'ip_version' } == 4 {
-        %!metadata{ 'ipv4_start_node' } = 0;
-    }
-    else {
-        my $index = 0;
-        # for IPv4 in IPv6 subnet /96 contains 0s
-        # so left node branch should be traversed 96 times
-        for ^96 {
-            ( $index,  ) = self.read-node( :$index );
-            last if $index >= %!metadata{ 'node_count' };
-        }
-        %!metadata{ 'ipv4_start_node' } = $index;
-    }
+    return self!decode( );
 }
 
+#| return two pointers for left and right tree branch
 method read-node ( Int:D :$index! ) {
     
     # negative or too big index cannot be requested
