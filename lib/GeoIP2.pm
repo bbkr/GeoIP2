@@ -59,7 +59,7 @@ method read-metadata ( ) returns Hash {
         
         # read one byte backwards
         $!handle.seek( -1, SeekFromCurrent );
-        my $byte = $!handle.read( 1 )[0];
+        my $byte = $!handle.read( 1 )[ 0 ];
         $!handle.seek( -1, SeekFromCurrent );
         
         # not a potential marker start, try next byte
@@ -77,7 +77,7 @@ method read-metadata ( ) returns Hash {
 }
 
 #| return two pointers for left and right tree branch
-method read-node ( Int:D :$index! ) {
+method read-node ( Int:D :$index! ) returns List {
     
     # negative or too big index cannot be requested
     X::NodeIndexOutOfRange.new( message => $index ).throw( )
@@ -118,6 +118,44 @@ method read-node ( Int:D :$index! ) {
     }
 }
 
+method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
+
+    # convert octet form of IP into array of bits in big-endian order
+    my @bits;
+    for $ip.comb( /\d+/ ) {
+        
+        # convert to bits
+        my @octet-bits = .Int.polymod( 2 xx * ).reverse;
+        
+        # append to flat bit array, zero pad byte from left if needed
+        push @bits, |( 0 xx ( 8 - +@octet-bits ) ), |@octet-bits;
+    }
+    self!debug( :@bits ) if $.debug;
+    
+    my $index = %.metadata{ 'ipv4_start_node' };
+    
+    for @bits -> $bit {
+        
+        # end of index or data pointer reached
+        last if $index >= %.metadata{ 'node_count' };
+
+        # check which branch of binary tree should be traversed
+        my ( $left-pointer, $right-pointer ) = self.read-node( :$index );
+        $index = $bit ?? $right-pointer !! $left-pointer;
+
+        self!debug( :$index, :$bit ) if $.debug;
+        
+    }
+    
+    # IP not found
+    return if $index == %.metadata{ 'node_count' };
+    
+    # position cursor to data section pointed by pointer
+    $!handle.seek( $index - %.metadata{ 'node_count' } + %.metadata{ 'search_tree_size' } );
+    
+    return self!decode( );
+}
+
 #| decode value at current handle position
 method !decode {
     
@@ -150,9 +188,26 @@ method !decode {
     # first byte is control byte
     my $control-byte = $!handle.read( 1 )[ 0 ];
     
-    # first 3 bits of control byte describe container type
+    # right 3 bits of control byte describe container type
     my $type = %types{ $control-byte +> 5 };
     self!debug( :$type ) if $.debug;
+    
+    # for pointers data is not located immediately after current cursor position
+    if ( $type eq 'pointer' ) {
+        
+        # remember current cursor position
+        # to restore it after pointer jump
+        my $cursor = $!handle.tell( );
+        
+        # decode data from remote location in file
+        $!handle.seek( self!decode-pointer( :$control-byte ), SeekFromBeginning );
+        my $out = self!decode( );
+        
+        # restore cursor to next byte
+        $!handle.seek( $cursor + 1, SeekFromBeginning );
+        
+        return $out;
+    }
     
     # extended type will map to type described by next byte
     if $type eq 'extended' {
@@ -170,13 +225,55 @@ method !decode {
         when 'map' { return self!decode-map( :$size ) }
         when 'utf8_string' { return self!decode-string( :$size ) }
         when 'uint16' | 'uint32' | 'uint64' { return self!decode-uint( :$size ) }
+        when 'double' { return self!decode-double( :$size ) }
+        when 'boolean' { return self!decode-boolean( :$size ) }
         default { die "Type $type NYI!" };
     }
 
 }
 
+method !decode-pointer ( Int:D :$control-byte! ) returns Int {
+    my $pointer;
+    
+    # constant sequence of bytes that separates nodes from data
+    state $data-marker = Buf.new( 0x00 xx 16 );
+    
+    # calculate pointer type
+    # located on bits 4..3 of control byte
+    my $type = ( $control-byte +& 0b00011000 ) +> 3;
+    
+    # for "small" pointers bits 2..0 of control byte are used
+    if $type ~~ 0 | 1 | 2 {
+        $pointer = $control-byte +& 0b00000111;
+    }
+    # for "big" pointer control byte bits are ignored
+    else {
+        $pointer = 0;
+    }
+    
+    # type maps directly to amount of following bytes
+    # required to construct pointer
+    for $!handle.read( $type + 1 ) -> $byte {
+        $pointer +<= 8;
+        $pointer +|= $byte;
+    }
+    
+    # some types have fixed value added
+    given $type {
+        when 1 { $pointer += 2048 }
+        when 2 { $pointer += 526336 }
+    }        
+    
+    # pointer starts at beginning of data section
+    $pointer += %.metadata{ 'search_tree_size' } + $data-marker.bytes;
+    
+    self!debug( :$pointer ) if $.debug;
+    
+    return $pointer;
+}
+
 #| check how big is next data chunk
-method !decode-size ( Int :$control-byte! ) returns Int {
+method !decode-size ( Int:D :$control-byte! ) returns Int {
 
     # last 5 bits of control byte describe container size
     my $size = $control-byte +& 0b00011111;
@@ -212,6 +309,15 @@ method !decode-uint ( Int:D :$size! ) returns Int {
     return $out;
 }
 
+method !decode-double ( Int:D :$size! ) {
+    
+    # NYI, just skip bytes without decoding
+    $!handle.read( $size );
+    
+    # TODO: decode IEEE754 value
+    return 'NYI!'
+}
+
 method !decode-string ( Int:D :$size! ) returns Str {
     
     return $!handle.read( $size ).decode( );
@@ -238,6 +344,13 @@ method !decode-map ( Int:D :$size! ) returns Hash {
     }
 
     return %out;
+}
+
+method !decode-boolean ( Int:D :$size! ) returns Bool {
+    
+    # non zero size means True,
+    # there is no additional data required to decode value
+    return $size.Bool;
 }
 
 method !debug ( *%_ ) {
