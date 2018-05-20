@@ -1,7 +1,5 @@
 unit class GeoIP2;
 
-use experimental :pack;
-
 # debug flag,
 # can be turned  on and off at any time
 has Bool $.debug is rw;
