@@ -298,10 +298,13 @@ method !decode-size ( Int:D :$control-byte! ) returns Int {
 
 method !decode-uint ( Int:D :$size! ) returns Int {
     my $out = 0;
-
-    for ^$size {
+    
+    # zero size means value 0
+    return $out unless $size;
+    
+    for $!handle.read( $size ) -> $byte {
         $out +<= 8;
-        $out +|= $!handle.read( 1 )[ 0 ];
+        $out +|= $byte;
     }
     
     return $out;
