@@ -70,8 +70,7 @@ my %expected-location = (
     },
     'country' => {
         'geoname_id' => 2635167,
-        # test data was generated before brexit
-        'is_in_european_union' => True,
+        'is_in_european_union' => True, # file was generated before brexit
         'iso_code' => 'GB',
         'names' => {
             'de' => 'Vereinigtes Königreich',
@@ -86,9 +85,8 @@ my %expected-location = (
     },
     'location' => {
         'accuracy_radius' => 100,
-        # TODO: implement!
-        'latitude' => 'NYI!',
-        'longitude' => 'NYI!',
+        'latitude' => 51.5142e0,
+        'longitude' => -0.0931e0,
         'time_zone' => 'Europe/London'
     },
     'registered_country' => {

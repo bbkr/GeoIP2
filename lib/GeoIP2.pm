@@ -1,5 +1,8 @@
 unit class GeoIP2;
 
+# only for IEEE conversions
+use NativeCall;
+
 # debug flag,
 # can be turned  on and off at any time
 has Bool $.debug is rw;
@@ -312,11 +315,17 @@ method !decode-uint ( Int:D :$size! ) returns Int {
 
 method !decode-double ( Int:D :$size! ) {
     
-    # NYI, just skip bytes without decoding
-    $!handle.read( $size );
+    my $bytes = $!handle.read( $size );
     
-    # TODO: decode IEEE754 value
-    return 'NYI!'
+    # native casting is used to convert Buf to IEEE format
+    # so if local architecture does not match big endian file format
+    # then byte order must be reversed
+    state $is-little-endian = nativecast(
+        CArray[ uint8 ], CArray[ uint32 ].new( 1 )
+    )[ 0 ] == 0x01;
+    $bytes .= reverse( ) if $is-little-endian;
+    
+    return nativecast( Pointer[ num64 ], $bytes ).deref( );
 }
 
 method !decode-string ( Int:D :$size! ) returns Str {
