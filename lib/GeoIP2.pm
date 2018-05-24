@@ -79,6 +79,7 @@ method read-metadata ( ) returns Hash {
 
 #| return two pointers for left and right tree branch
 method read-node ( Int:D :$index! ) returns List {
+    my ( $left-pointer, $right-pointer );
     
     # negative or too big index cannot be requested
     X::NodeIndexOutOfRange.new( message => $index ).throw( )
@@ -90,33 +91,50 @@ method read-node ( Int:D :$index! ) returns List {
     # read all index bytes
     my $bytes = $!handle.read( %.metadata{ 'node_byte_size' } );
     
+    # small database
+    if %.metadata{ 'record_size' } == 24 {
+        
+        # extract left side bits 23...16, 15...8 and 7...0 from left bytes
+        $left-pointer = 0;
+        for 0..2 {
+            $left-pointer +<= 8;
+            $left-pointer +|= $bytes[ $_ ];
+        }
+        
+        # extract right side bits 23...16, 15...8 and 7...0 from right bytes
+        $right-pointer = 0;
+        for 3..5 {
+            $right-pointer +<= 8;
+            $right-pointer +|= $bytes[ $_ ];
+        }
+    }
     # medium database,
     # most important bits of both pointers are stored in middle byte
-    if %.metadata{ 'record_size' } == 28 {
+    elsif %.metadata{ 'record_size' } == 28 {
 
         # extract left side bits 27...24 from middle byte
-        my $left-pointer = $bytes[ 3 ] +> 4;
-        # merge with left side bits 23...16, 15...8 and 7...0
+        $left-pointer = $bytes[ 3 ] +> 4;
+        # merge with left side bits 23...16, 15...8 and 7...0 from left bytes
         for 0..2 {
             $left-pointer +<= 8;
             $left-pointer +|= $bytes[ $_ ];
         }
         
         # extract right side bits 27...24 from middle byte
-        my $right-pointer = $bytes[ 3 ] +& 0x0F;
-        # merge with right side bits 23...16, 15...8 and 7...0
+        $right-pointer = $bytes[ 3 ] +& 0x0F;
+        # merge with right side bits 23...16, 15...8 and 7...0 from right bytes
         for 4..6 {
             $right-pointer +<= 8;
             $right-pointer +|= $bytes[ $_ ];
         }
-
-        self!debug( :$left-pointer, :$right-pointer ) if $.debug;
-        
-        return $left-pointer, $right-pointer;
     }
     else {
        die "Record size " ~ %.metadata{ 'record_size' } ~ " NYI!";
     }
+    
+    self!debug( :$left-pointer, :$right-pointer ) if $.debug;
+    
+    return $left-pointer, $right-pointer;
 }
 
 method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
@@ -225,9 +243,11 @@ method !decode {
         when 'array' { return self!decode-array( :$size ) }
         when 'map' { return self!decode-map( :$size ) }
         when 'utf8_string' { return self!decode-string( :$size ) }
-        when 'uint16' | 'uint32' | 'uint64' { return self!decode-uint( :$size ) }
-        when 'double' { return self!decode-double( :$size ) }
+        when 'uint16' | 'uint32' | 'uint64' | 'uint128' { return self!decode-uint( :$size ) }
+        when 'double' | 'float' { return self!decode-double( :$size ) }
         when 'boolean' { return self!decode-boolean( :$size ) }
+        when 'bytes' { return self!decode-bytes( :$size ) }
+        when 'int32' { return self!decode-int( :$size ) }
         default { die "Type $type NYI!" };
     }
 
@@ -325,7 +345,13 @@ method !decode-double ( Int:D :$size! ) {
     )[ 0 ] == 0x01;
     $bytes .= reverse( ) if $is-little-endian;
     
-    return nativecast( Pointer[ num64 ], $bytes ).deref( );
+    given $size {
+        when 4 { return nativecast( Pointer[ num32 ], $bytes ).deref( ) }
+        when 8 { return nativecast( Pointer[ num64 ], $bytes ).deref( ) }
+        default {
+            X::NYI.new( feature => "IEEE754 of $size bytes" ).throw( )
+        }
+    }
 }
 
 method !decode-string ( Int:D :$size! ) returns Str {
@@ -362,6 +388,38 @@ method !decode-boolean ( Int:D :$size! ) returns Bool {
     # there is no additional data required to decode value
     return $size.Bool;
 }
+
+method !decode-bytes ( Int:D :$size! ) returns Buf {
+    
+    # return raw byte stream
+    return $!handle.read( $size );
+}
+
+method !decode-int ( Int:D :$size! ) returns Int {
+    my $out = 0;
+    
+    return $out unless $size;
+    
+    my $bytes = $!handle.read( $size );
+    
+    # two's complement format - leftmost bit decides about sign
+    my $sign;
+    if $bytes[0] +& 0b10000000 == 128 {
+        $sign = -1;
+    }
+    else {
+        $sign = 1;
+    }
+
+    for $bytes.list -> $byte {
+        $out +<= 8;
+        $out +|= $sign == 1 ?? $byte !! $byte +^ 0b11111111;
+    }
+
+    return $out if $sign == 1;
+    return -( $out + 1 );
+}
+
 
 method !debug ( *%_ ) {
     %_{ 'offset' } = $!handle.defined ?? $!handle.tell( ) !! 'unknown';
