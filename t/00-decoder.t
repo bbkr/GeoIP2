@@ -79,7 +79,7 @@ subtest 'data types' => sub {
     );
     is-deeply %got, %expected, 'empty or zero';
     
-    my %got = $geo.read-location( ip => '1.1.1.0' );
+    %got = $geo.read-location( ip => '1.1.1.0' );
     %expected = (
         'array' => [ 1, 2, 3 ],
         'boolean' => True,
