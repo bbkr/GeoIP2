@@ -98,7 +98,7 @@ method !read-metadata ( ) returns Hash {
     }
     
     # decode metadata section into map structure
-    return self!decode( );
+    return self!decode-value( );
 }
 
 #| return two pointers for left and right tree branch
@@ -196,47 +196,21 @@ method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
     # position cursor to data section pointed by pointer
     $!handle.seek( $index - $!node-count + $!search-tree-size );
     
-    return self!decode( );
+    return self!decode-value( );
 }
 
 #| decode value at current handle position
-method !decode {
-    
-    # TODO: type names are meaningless,
-    # numeric values can be mapped directly to decoding methods
-    # to gain some performance
-    state %types =
-    
-        # basic types
-        0  => 'extended',
-        1  => 'pointer',
-        2  => 'utf8_string',
-        3  => 'double',
-        4  => 'bytes',
-        5  => 'uint16',
-        6  => 'uint32',
-        7  => 'map',
-
-        # extended types
-        8  => 'int32',
-        9  => 'uint64',
-        10 => 'uint128',
-        11 => 'array',
-        12 => 'container',
-        13 => 'end_marker',
-        14 => 'boolean',
-        15 => 'float'
-    ;
+method !decode-value ( ) {
     
     # first byte is control byte
     my $control-byte = $!handle.read( 1 )[ 0 ];
     
     # right 3 bits of control byte describe container type
-    my $type = %types{ $control-byte +> 5 };
+    my $type = $control-byte +> 5;
     self!debug( :$type ) if $.debug;
     
     # for pointers data is not located immediately after current cursor position
-    if ( $type eq 'pointer' ) {
+    if $type == 1 {
         
         # remember current cursor position
         # to restore it after pointer jump
@@ -244,7 +218,7 @@ method !decode {
         
         # decode data from remote location in file
         $!handle.seek( self!decode-pointer( :$control-byte ), SeekFromBeginning );
-        my $out = self!decode( );
+        my $out = self!decode-value( );
         
         # restore cursor to next byte
         $!handle.seek( $cursor + 1, SeekFromBeginning );
@@ -253,10 +227,8 @@ method !decode {
     }
     
     # extended type will map to type described by next byte
-    if $type eq 'extended' {
-        # TODO: add protection against unknown extended type
-        my $next-byte = $!handle.read( 1 )[ 0 ];
-        $type = %types{ $next-byte + 7 };
+    if $type == 0 {
+        $type = $!handle.read( 1 )[ 0 ] + 7;
         self!debug( :$type ) if $.debug;
     }
     
@@ -264,15 +236,17 @@ method !decode {
     self!debug( :$size ) if $.debug;
     
     given $type {
-        when 'array' { return self!decode-array( :$size ) }
-        when 'map' { return self!decode-map( :$size ) }
-        when 'utf8_string' { return self!decode-string( :$size ) }
-        when 'uint16' | 'uint32' | 'uint64' | 'uint128' { return self!decode-uint( :$size ) }
-        when 'double' | 'float' { return self!decode-double( :$size ) }
-        when 'boolean' { return self!decode-boolean( :$size ) }
-        when 'bytes' { return self!decode-bytes( :$size ) }
-        when 'int32' { return self!decode-int( :$size ) }
-        default { die "Type $type NYI!" };
+        when 2 { return self!decode-string( :$size ) }
+        when 5 | 6 | 9 | 10 { return self!decode-unsigned-integer( :$size ) }
+        when 8 { return self!decode-signed-integer( :$size ) }
+        when 3 | 15 { return self!decode-floating-number( :$size ) }
+        when 14 { return self!decode-boolean( :$size ) }
+        when 4 { return self!decode-raw-bytes( :$size ) }
+        when 11 { return self!decode-array( :$size ) }
+        when 7 { return self!decode-hash( :$size ) }
+        default {
+            X::NYI.new( feature => "Value of $type code" ).throw( )
+        }
     }
 
 }
@@ -343,7 +317,7 @@ method !decode-size ( Int:D :$control-byte! ) returns Int {
     # return ( $size, $offset + $bytes_to_read );
 }
 
-method !decode-uint ( Int:D :$size! ) returns Int {
+method !decode-unsigned-integer ( Int:D :$size! ) returns Int {
     my $out = 0;
     
     # zero size means value 0
@@ -357,7 +331,7 @@ method !decode-uint ( Int:D :$size! ) returns Int {
     return $out;
 }
 
-method !decode-double ( Int:D :$size! ) {
+method !decode-floating-number ( Int:D :$size! ) {
     
     my $bytes = $!handle.read( $size );
     
@@ -388,19 +362,19 @@ method !decode-array ( Int:D :$size! ) returns Array {
     my @out;
     
     for ^$size {
-        my $value = self!decode( );
+        my $value = self!decode-value( );
         @out.push: $value;
     }
 
     return @out;
 }
 
-method !decode-map ( Int:D :$size! ) returns Hash {
+method !decode-hash ( Int:D :$size! ) returns Hash {
     my %out;
     
     for ^$size {
-        my $key = self!decode( );
-        my $value = self!decode( );
+        my $key = self!decode-value( );
+        my $value = self!decode-value( );
         %out{ $key } = $value;
     }
 
@@ -414,13 +388,13 @@ method !decode-boolean ( Int:D :$size! ) returns Bool {
     return $size.Bool;
 }
 
-method !decode-bytes ( Int:D :$size! ) returns Buf {
+method !decode-raw-bytes ( Int:D :$size! ) returns Buf {
     
     return Buf.new unless $size;
     return $!handle.read( $size );
 }
 
-method !decode-int ( Int:D :$size! ) returns Int {
+method !decode-signed-integer ( Int:D :$size! ) returns Int {
     my $out = 0;
     
     return $out unless $size;
