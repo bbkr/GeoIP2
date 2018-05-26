@@ -3,7 +3,7 @@ use lib 'lib';
 use Test;
 use GeoIP2;
 
-plan 8;
+plan 9;
 
 dies-ok { GeoIP2.new }, 'file path is required';
 
@@ -104,4 +104,15 @@ subtest 'data types' => sub {
     %got{ 'float' } .= round( 0.1 );
     is-deeply %got, %expected, 'big and complex';
 
+}
+
+subtest 'record sizes' => sub {
+
+    for 24, 28, 32 -> $size {
+    
+        $geo = GeoIP2.new( path => './t/databases/MaxMind-DB-test-mixed-' ~ $size ~ '.mmdb' );
+        
+        is-deeply $geo.read-location( ip => '1.1.1.1' ), { ip => '::1.1.1.1' },
+            'locate by ' ~ $size ~ ' bit pointer';
+    }
 }

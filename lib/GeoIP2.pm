@@ -115,45 +115,65 @@ method read-node ( Int:D :$index! ) returns List {
     # read all index bytes
     my $bytes = $!handle.read( $!node-byte-size );
     
-    # small database
-    if $!record-size == 24 {
+    given $!record-size {
+    
+        when 24 {
+            
+            # extract left side bits 23...16, 15...8 and 7...0 from left bytes
+            $left-pointer = 0;
+            for 0..2 {
+                $left-pointer +<= 8;
+                $left-pointer +|= $bytes[ $_ ];
+            }
+            
+            # extract right side bits 23...16, 15...8 and 7...0 from right bytes
+            $right-pointer = 0;
+            for 3..5 {
+                $right-pointer +<= 8;
+                $right-pointer +|= $bytes[ $_ ];
+            }
+            
+        }
+        when 28 {
+            
+            # extract left side bits 27...24 from middle byte
+            $left-pointer = $bytes[ 3 ] +> 4;
+            # merge with left side bits 23...16, 15...8 and 7...0 from left bytes
+            for 0..2 {
+                $left-pointer +<= 8;
+                $left-pointer +|= $bytes[ $_ ];
+            }
         
-        # extract left side bits 23...16, 15...8 and 7...0 from left bytes
-        $left-pointer = 0;
-        for 0..2 {
-            $left-pointer +<= 8;
-            $left-pointer +|= $bytes[ $_ ];
+            # extract right side bits 27...24 from middle byte
+            $right-pointer = $bytes[ 3 ] +& 0x0F;
+            # merge with right side bits 23...16, 15...8 and 7...0 from right bytes
+            for 4..6 {
+                $right-pointer +<= 8;
+                $right-pointer +|= $bytes[ $_ ];
+            }
+            
         }
-        
-        # extract right side bits 23...16, 15...8 and 7...0 from right bytes
-        $right-pointer = 0;
-        for 3..5 {
-            $right-pointer +<= 8;
-            $right-pointer +|= $bytes[ $_ ];
+        when 32 {
+            
+            # extract left side bits 31..24, 23...16, 15...8 and 7...0 from left bytes
+            $left-pointer = 0;
+            for 0..3 {
+                $left-pointer +<= 8;
+                $left-pointer +|= $bytes[ $_ ];
+            }
+            
+            # extract right side bits 31..24, 23...16, 15...8 and 7...0 from right bytes
+            $right-pointer = 0;
+            for 4..7 {
+                $right-pointer +<= 8;
+                $right-pointer +|= $bytes[ $_ ];
+            }
+            
         }
-    }
-    # medium database,
-    # most important bits of both pointers are stored in middle byte
-    elsif $!record-size == 28 {
-
-        # extract left side bits 27...24 from middle byte
-        $left-pointer = $bytes[ 3 ] +> 4;
-        # merge with left side bits 23...16, 15...8 and 7...0 from left bytes
-        for 0..2 {
-            $left-pointer +<= 8;
-            $left-pointer +|= $bytes[ $_ ];
+        default {
+            X::NYI.new( feature => 'Record size ' ~ $!record-size ).throw( );
         }
-        
-        # extract right side bits 27...24 from middle byte
-        $right-pointer = $bytes[ 3 ] +& 0x0F;
-        # merge with right side bits 23...16, 15...8 and 7...0 from right bytes
-        for 4..6 {
-            $right-pointer +<= 8;
-            $right-pointer +|= $bytes[ $_ ];
-        }
-    }
-    else {
-       die "Record size " ~ $!record-size ~ " NYI!";
+    
     }
     
     self!debug( :$left-pointer, :$right-pointer ) if $.debug;
@@ -245,7 +265,7 @@ method !decode-value ( ) {
         when 11 { return self!decode-array( :$size ) }
         when 7 { return self!decode-hash( :$size ) }
         default {
-            X::NYI.new( feature => "Value of $type code" ).throw( )
+            X::NYI.new( feature => 'Value type ' ~ $type ).throw( )
         }
     }
 
@@ -347,7 +367,7 @@ method !decode-floating-number ( Int:D :$size! ) {
         when 4 { return nativecast( Pointer[ num32 ], $bytes ).deref( ) }
         when 8 { return nativecast( Pointer[ num64 ], $bytes ).deref( ) }
         default {
-            X::NYI.new( feature => "IEEE754 of $size bytes" ).throw( )
+            X::NYI.new( feature => 'IEEE754 of size ' ~ $size ).throw( )
         }
     }
 }
