@@ -8,7 +8,17 @@ use NativeCall;
 has Bool $.debug is rw;
 
 # database informations
-has %.metadata;
+has Version     $.binary-format-version;
+has DateTime    $.build-timestamp;
+has Str         $.database-type;
+has             %!descriptions;
+has Version     $.ip-version;
+has Int         $.ipv4-start-node;
+has Set         $.languages;
+has Int         $.node-byte-size;
+has Int         $.node-count;
+has Int         $.record-size;
+has Int         $.search-tree-size;
 
 # *.mmdb file decriptor
 has IO::Handle $!handle;
@@ -24,34 +34,48 @@ submethod BUILD ( Str:D :$path!, :$!debug = False ) {
     $!handle = open( $path, :bin );
     
     # extract metdata to confirm file is valid-ish
-    %!metadata = self.read-metadata( );
-    
-    # precalculate derived values
-    %!metadata{ 'node_byte_size' } = ( %!metadata{ 'record_size' } * 2 / 8 ).Int;
-    %!metadata{ 'search_tree_size' } = %!metadata{ 'node_count' } * %!metadata{ 'node_byte_size' };
-    if %!metadata{ 'ip_version' } == 4 {
-        %!metadata{ 'ipv4_start_node' } = 0;
+    with self!read-metadata( ) {
+        $!binary-format-version = Version.new(
+            .{ 'binary_format_major_version', 'binary_format_minor_version' }.join( '.' )
+        );
+        $!build-timestamp   = DateTime.new( .{ 'build_epoch' } );
+        $!database-type     = .{ 'database_type' };
+        %!descriptions      = .{ 'description' };
+        $!ip-version        = Version.new( .{ 'ip_version' } );
+        $!languages         = .{ 'languages' }.map( { .uc } ).Set;
+        $!node-count        = .{ 'node_count' };
+        $!record-size       = .{ 'record_size' };
     }
-    else {
-        my $index = 0;
+    
+    # precalculate derived values for better performance
+    $!node-byte-size    = ( $!record-size * 2 / 8 ).Int;
+    $!search-tree-size  = $!node-count * $!node-byte-size;
+    $!ipv4-start-node   = 0;
+    if $!ip-version ~~ v6 {
         # for IPv4 in IPv6 subnet /96 contains 0s
         # so left node branch should be traversed 96 times
         for ^96 {
-            ( $index,  ) = self.read-node( :$index );
-            last if $index >= %!metadata{ 'node_count' };
+            ( $!ipv4-start-node,  ) = self.read-node( index => $!ipv4-start-node );
+            last if $!ipv4-start-node >= $!node-count;
         }
-        %!metadata{ 'ipv4_start_node' } = $index;
     }
 }
 
+#| return description in requested language ( if available )
+method description ( Str:D $language = 'EN' ) {
+
+    return %!descriptions{ $language.lc };
+}
+
 #| extract metadata information
-method read-metadata ( ) returns Hash {
+method !read-metadata ( ) returns Hash {
 
     # constant sequence of bytes that separates IP data from metadata
-    state $metadata-marker = Buf.new( 0xAB, 0xCD, 0xEF ) ~ 'MaxMind.com'.encode;
+    state $metadata-marker = Buf.new( 0xAB, 0xCD, 0xEF ) ~ 'MaxMind.com'.encode( );
 
     # position cursor after last occurrence of marker
     loop {
+        
         # jump to EOF
         FIRST $!handle.seek( 0, SeekFromEnd );
         
@@ -83,16 +107,16 @@ method read-node ( Int:D :$index! ) returns List {
     
     # negative or too big index cannot be requested
     X::NodeIndexOutOfRange.new( message => $index ).throw( )
-        unless 0 <= $index < %!metadata{ 'node_count' };
+        unless 0 <= $index < $!node-count;
 
     # position cursor at the beginnig of node index
-    $!handle.seek( $index * %.metadata{ 'node_byte_size' }, SeekFromBeginning );
+    $!handle.seek( $index * $!node-byte-size, SeekFromBeginning );
     
     # read all index bytes
-    my $bytes = $!handle.read( %.metadata{ 'node_byte_size' } );
+    my $bytes = $!handle.read( $!node-byte-size );
     
     # small database
-    if %.metadata{ 'record_size' } == 24 {
+    if $!record-size == 24 {
         
         # extract left side bits 23...16, 15...8 and 7...0 from left bytes
         $left-pointer = 0;
@@ -110,7 +134,7 @@ method read-node ( Int:D :$index! ) returns List {
     }
     # medium database,
     # most important bits of both pointers are stored in middle byte
-    elsif %.metadata{ 'record_size' } == 28 {
+    elsif $!record-size == 28 {
 
         # extract left side bits 27...24 from middle byte
         $left-pointer = $bytes[ 3 ] +> 4;
@@ -129,7 +153,7 @@ method read-node ( Int:D :$index! ) returns List {
         }
     }
     else {
-       die "Record size " ~ %.metadata{ 'record_size' } ~ " NYI!";
+       die "Record size " ~ $!record-size ~ " NYI!";
     }
     
     self!debug( :$left-pointer, :$right-pointer ) if $.debug;
@@ -151,12 +175,12 @@ method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
     }
     self!debug( :@bits ) if $.debug;
     
-    my $index = %.metadata{ 'ipv4_start_node' };
+    my $index = $!ipv4-start-node;
     
     for @bits -> $bit {
         
         # end of index or data pointer reached
-        last if $index >= %.metadata{ 'node_count' };
+        last if $index >= $!node-count;
 
         # check which branch of binary tree should be traversed
         my ( $left-pointer, $right-pointer ) = self.read-node( :$index );
@@ -167,10 +191,10 @@ method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
     }
     
     # IP not found
-    return if $index == %.metadata{ 'node_count' };
+    return if $index == $!node-count;
     
     # position cursor to data section pointed by pointer
-    $!handle.seek( $index - %.metadata{ 'node_count' } + %.metadata{ 'search_tree_size' } );
+    $!handle.seek( $index - $!node-count + $!search-tree-size );
     
     return self!decode( );
 }
@@ -286,7 +310,7 @@ method !decode-pointer ( Int:D :$control-byte! ) returns Int {
     }        
     
     # pointer starts at beginning of data section
-    $pointer += %.metadata{ 'search_tree_size' } + $data-marker.bytes;
+    $pointer += $!search-tree-size + $data-marker.bytes;
     
     self!debug( :$pointer ) if $.debug;
     
@@ -356,6 +380,7 @@ method !decode-double ( Int:D :$size! ) {
 
 method !decode-string ( Int:D :$size! ) returns Str {
     
+    return '' unless $size;
     return $!handle.read( $size ).decode( );
 }
 
@@ -391,7 +416,7 @@ method !decode-boolean ( Int:D :$size! ) returns Bool {
 
 method !decode-bytes ( Int:D :$size! ) returns Buf {
     
-    # return raw byte stream
+    return Buf.new unless $size;
     return $!handle.read( $size );
 }
 
