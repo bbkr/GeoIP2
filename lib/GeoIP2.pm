@@ -423,7 +423,7 @@ method !decode-signed-integer ( Int:D :$size! ) returns Int {
     
     # two's complement format - leftmost bit decides about sign
     my $sign;
-    if $bytes[0] +& 0b10000000 == 128 {
+    if $size == 4 and $bytes[0] +& 0b10000000 == 128 {
         $sign = -1;
     }
     else {
