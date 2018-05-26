@@ -221,6 +221,7 @@ method read-node ( Int:D :$index! ) returns List {
 
 #| decode value at current handle position
 method !read-data ( ) {
+    my $out;
     
     # first byte is control byte
     my $control-byte = $!handle.read( 1 )[ 0 ];
@@ -238,7 +239,7 @@ method !read-data ( ) {
         
         # decode data from remote location in file
         $!handle.seek( self!read-pointer( :$control-byte ), SeekFromBeginning );
-        my $out = self!read-data( );
+        $out = self!read-data( );
         
         # restore cursor to next byte
         $!handle.seek( $cursor + 1, SeekFromBeginning );
@@ -256,19 +257,21 @@ method !read-data ( ) {
     self!debug( :$size ) if $.debug;
     
     given $type {
-        when 2 { return self!read-string( :$size ) }
-        when 5 | 6 | 9 | 10 { return self!read-unsigned-integer( :$size ) }
-        when 8 { return self!read-signed-integer( :$size ) }
-        when 3 | 15 { return self!read-floating-number( :$size ) }
-        when 14 { return self!read-boolean( :$size ) }
-        when 11 { return self!read-array( :$size ) }
-        when 7 { return self!read-hash( :$size ) }
-        when 4 { return self!read-raw-bytes( :$size ) }
+        when 2 { $out = self!read-string( :$size ) }
+        when 5 | 6 | 9 | 10 { $out = self!read-unsigned-integer( :$size ) }
+        when 8 { $out = self!read-signed-integer( :$size ) }
+        when 3 | 15 { $out = self!read-floating-number( :$size ) }
+        when 14 { $out = self!read-boolean( :$size ) }
+        when 11 { $out = self!read-array( :$size ) }
+        when 7 { $out = self!read-hash( :$size ) }
+        when 4 { $out = self!read-raw-bytes( :$size ) }
         default {
             X::NYI.new( feature => 'Value type ' ~ $type ).throw( )
         }
     }
-
+    self!debug( data => $out ) if $.debug;
+    
+    return $out;
 }
 
 method !read-pointer ( Int:D :$control-byte! ) returns Int {
