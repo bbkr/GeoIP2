@@ -233,16 +233,19 @@ method !read-data ( ) {
     # for pointers data is not located immediately after current cursor position
     if $type == 1 {
         
+        # find location of remote data
+        my $remote-cursor = self!read-pointer( :$control-byte );
+        
         # remember current cursor position
         # to restore it after pointer jump
-        my $cursor = $!handle.tell( );
+        my $current-cursor = $!handle.tell( );
         
         # decode data from remote location in file
-        $!handle.seek( self!read-pointer( :$control-byte ), SeekFromBeginning );
+        $!handle.seek( $remote-cursor, SeekFromBeginning );
         $out = self!read-data( );
         
-        # restore cursor to next byte
-        $!handle.seek( $cursor + 1, SeekFromBeginning );
+        # return from pointer jump
+        $!handle.seek( $current-cursor, SeekFromBeginning );
         
         return $out;
     }
