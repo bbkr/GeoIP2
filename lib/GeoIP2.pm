@@ -67,6 +67,44 @@ method description ( Str:D $language = 'EN' ) {
     return %!descriptions{ $language.lc };
 }
 
+method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
+
+    # convert octet form of IP into array of bits in big-endian order
+    my @bits;
+    for $ip.comb( /\d+/ ) {
+        
+        # convert to bits
+        my @octet-bits = .Int.polymod( 2 xx * ).reverse;
+        
+        # append to flat bit array, zero pad byte from left if needed
+        push @bits, |( 0 xx ( 8 - +@octet-bits ) ), |@octet-bits;
+    }
+    self!debug( :@bits ) if $.debug;
+    
+    my $index = $!ipv4-start-node;
+    
+    for @bits -> $bit {
+        
+        # end of index or data pointer reached
+        last if $index >= $!node-count;
+
+        # check which branch of binary tree should be traversed
+        my ( $left-pointer, $right-pointer ) = self.read-node( :$index );
+        $index = $bit ?? $right-pointer !! $left-pointer;
+
+        self!debug( :$index, :$bit ) if $.debug;
+        
+    }
+    
+    # IP not found
+    return if $index == $!node-count;
+    
+    # position cursor to data section pointed by pointer
+    $!handle.seek( $index - $!node-count + $!search-tree-size );
+    
+    return self!read-data( );
+}
+
 #| extract metadata information
 method !read-metadata ( ) returns Hash {
 
@@ -98,7 +136,7 @@ method !read-metadata ( ) returns Hash {
     }
     
     # decode metadata section into map structure
-    return self!decode-value( );
+    return self!read-data( );
 }
 
 #| return two pointers for left and right tree branch
@@ -181,46 +219,8 @@ method read-node ( Int:D :$index! ) returns List {
     return $left-pointer, $right-pointer;
 }
 
-method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
-
-    # convert octet form of IP into array of bits in big-endian order
-    my @bits;
-    for $ip.comb( /\d+/ ) {
-        
-        # convert to bits
-        my @octet-bits = .Int.polymod( 2 xx * ).reverse;
-        
-        # append to flat bit array, zero pad byte from left if needed
-        push @bits, |( 0 xx ( 8 - +@octet-bits ) ), |@octet-bits;
-    }
-    self!debug( :@bits ) if $.debug;
-    
-    my $index = $!ipv4-start-node;
-    
-    for @bits -> $bit {
-        
-        # end of index or data pointer reached
-        last if $index >= $!node-count;
-
-        # check which branch of binary tree should be traversed
-        my ( $left-pointer, $right-pointer ) = self.read-node( :$index );
-        $index = $bit ?? $right-pointer !! $left-pointer;
-
-        self!debug( :$index, :$bit ) if $.debug;
-        
-    }
-    
-    # IP not found
-    return if $index == $!node-count;
-    
-    # position cursor to data section pointed by pointer
-    $!handle.seek( $index - $!node-count + $!search-tree-size );
-    
-    return self!decode-value( );
-}
-
 #| decode value at current handle position
-method !decode-value ( ) {
+method !read-data ( ) {
     
     # first byte is control byte
     my $control-byte = $!handle.read( 1 )[ 0 ];
@@ -237,8 +237,8 @@ method !decode-value ( ) {
         my $cursor = $!handle.tell( );
         
         # decode data from remote location in file
-        $!handle.seek( self!decode-pointer( :$control-byte ), SeekFromBeginning );
-        my $out = self!decode-value( );
+        $!handle.seek( self!read-pointer( :$control-byte ), SeekFromBeginning );
+        my $out = self!read-data( );
         
         # restore cursor to next byte
         $!handle.seek( $cursor + 1, SeekFromBeginning );
@@ -252,18 +252,18 @@ method !decode-value ( ) {
         self!debug( :$type ) if $.debug;
     }
     
-    my $size = self!decode-size( :$control-byte );
+    my $size = self!read-size( :$control-byte );
     self!debug( :$size ) if $.debug;
     
     given $type {
-        when 2 { return self!decode-string( :$size ) }
-        when 5 | 6 | 9 | 10 { return self!decode-unsigned-integer( :$size ) }
-        when 8 { return self!decode-signed-integer( :$size ) }
-        when 3 | 15 { return self!decode-floating-number( :$size ) }
-        when 14 { return self!decode-boolean( :$size ) }
-        when 4 { return self!decode-raw-bytes( :$size ) }
-        when 11 { return self!decode-array( :$size ) }
-        when 7 { return self!decode-hash( :$size ) }
+        when 2 { return self!read-string( :$size ) }
+        when 5 | 6 | 9 | 10 { return self!read-unsigned-integer( :$size ) }
+        when 8 { return self!read-signed-integer( :$size ) }
+        when 3 | 15 { return self!read-floating-number( :$size ) }
+        when 14 { return self!read-boolean( :$size ) }
+        when 11 { return self!read-array( :$size ) }
+        when 7 { return self!read-hash( :$size ) }
+        when 4 { return self!read-raw-bytes( :$size ) }
         default {
             X::NYI.new( feature => 'Value type ' ~ $type ).throw( )
         }
@@ -271,7 +271,7 @@ method !decode-value ( ) {
 
 }
 
-method !decode-pointer ( Int:D :$control-byte! ) returns Int {
+method !read-pointer ( Int:D :$control-byte! ) returns Int {
     my $pointer;
     
     # constant sequence of bytes that separates nodes from data
@@ -312,7 +312,7 @@ method !decode-pointer ( Int:D :$control-byte! ) returns Int {
 }
 
 #| check how big is next data chunk
-method !decode-size ( Int:D :$control-byte! ) returns Int {
+method !read-size ( Int:D :$control-byte! ) returns Int {
 
     # last 5 bits of control byte describe container size
     my $size = $control-byte +& 0b00011111;
@@ -337,7 +337,13 @@ method !decode-size ( Int:D :$control-byte! ) returns Int {
     # return ( $size, $offset + $bytes_to_read );
 }
 
-method !decode-unsigned-integer ( Int:D :$size! ) returns Int {
+method !read-string ( Int:D :$size! ) returns Str {
+    
+    return '' unless $size;
+    return $!handle.read( $size ).decode( );
+}
+
+method !read-unsigned-integer ( Int:D :$size! ) returns Int {
     my $out = 0;
     
     # zero size means value 0
@@ -351,7 +357,34 @@ method !decode-unsigned-integer ( Int:D :$size! ) returns Int {
     return $out;
 }
 
-method !decode-floating-number ( Int:D :$size! ) {
+method !read-signed-integer ( Int:D :$size! ) returns Int {
+    my $out = 0;
+    
+    return $out unless $size;
+    
+    my $bytes = $!handle.read( $size );
+    
+    # two's complement format:
+    # leftmost bit decides about sign
+    # (but only when all 4 bytes are given)
+    my $sign;
+    if $size == 4 and $bytes[0] +& 0b10000000 == 128 {
+        $sign = -1;
+    }
+    else {
+        $sign = 1;
+    }
+
+    for $bytes.list -> $byte {
+        $out +<= 8;
+        $out +|= $sign == 1 ?? $byte !! $byte +^ 0b11111111;
+    }
+
+    return $out if $sign == 1;
+    return -( $out + 1 );
+}
+
+method !read-floating-number ( Int:D :$size! ) {
     
     my $bytes = $!handle.read( $size );
     
@@ -372,73 +405,41 @@ method !decode-floating-number ( Int:D :$size! ) {
     }
 }
 
-method !decode-string ( Int:D :$size! ) returns Str {
-    
-    return '' unless $size;
-    return $!handle.read( $size ).decode( );
-}
-
-method !decode-array ( Int:D :$size! ) returns Array {
-    my @out;
-    
-    for ^$size {
-        my $value = self!decode-value( );
-        @out.push: $value;
-    }
-
-    return @out;
-}
-
-method !decode-hash ( Int:D :$size! ) returns Hash {
-    my %out;
-    
-    for ^$size {
-        my $key = self!decode-value( );
-        my $value = self!decode-value( );
-        %out{ $key } = $value;
-    }
-
-    return %out;
-}
-
-method !decode-boolean ( Int:D :$size! ) returns Bool {
+method !read-boolean ( Int:D :$size! ) returns Bool {
     
     # non zero size means True,
     # there is no additional data required to decode value
     return $size.Bool;
 }
 
-method !decode-raw-bytes ( Int:D :$size! ) returns Buf {
+method !read-array ( Int:D :$size! ) returns Array {
+    my @out;
+    
+    for ^$size {
+        my $value = self!read-data( );
+        @out.push: $value;
+    }
+
+    return @out;
+}
+
+method !read-hash ( Int:D :$size! ) returns Hash {
+    my %out;
+    
+    for ^$size {
+        my $key = self!read-data( );
+        my $value = self!read-data( );
+        %out{ $key } = $value;
+    }
+
+    return %out;
+}
+
+method !read-raw-bytes ( Int:D :$size! ) returns Buf {
     
     return Buf.new unless $size;
     return $!handle.read( $size );
 }
-
-method !decode-signed-integer ( Int:D :$size! ) returns Int {
-    my $out = 0;
-    
-    return $out unless $size;
-    
-    my $bytes = $!handle.read( $size );
-    
-    # two's complement format - leftmost bit decides about sign
-    my $sign;
-    if $size == 4 and $bytes[0] +& 0b10000000 == 128 {
-        $sign = -1;
-    }
-    else {
-        $sign = 1;
-    }
-
-    for $bytes.list -> $byte {
-        $out +<= 8;
-        $out +|= $sign == 1 ?? $byte !! $byte +^ 0b11111111;
-    }
-
-    return $out if $sign == 1;
-    return -( $out + 1 );
-}
-
 
 method !debug ( *%_ ) {
     %_{ 'offset' } = $!handle.defined ?? $!handle.tell( ) !! 'unknown';
