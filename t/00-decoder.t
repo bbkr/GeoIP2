@@ -3,7 +3,7 @@ use lib 'lib';
 use Test;
 use GeoIP2;
 
-plan 9;
+plan 8;
 
 dies-ok { GeoIP2.new }, 'file path is required';
 
@@ -39,21 +39,6 @@ subtest 'metadata' => sub {
     is $geo.node-count, 395, 'node count';
     is $geo.record-size, 24, 'record size';
     is $geo.search-tree-size, 2370, 'search tree size';
-
-}
-
-subtest 'nodes' => sub {
-
-    plan 5;
-
-    throws-like { $geo.read-node( index => -1 ) }, X::NodeIndexOutOfRange,
-        'node index cannot be negative';
-    throws-like { $geo.read-node( index => 1431 ) }, X::NodeIndexOutOfRange,
-        'node index cannot exceed amount of nodes';
-
-    is-deeply $geo.read-node( index => 0 ), ( 1, 332 ), 'pointers to ( node, node )';
-    is-deeply $geo.read-node( index => 64 ), ( 65, 395 ), 'pointers to ( node, missing )';
-    is-deeply $geo.read-node( index => 394 ), ( 526, 395 ), 'pointers to ( data, missing )';
 
 }
 
@@ -115,4 +100,5 @@ subtest 'record sizes' => sub {
         is-deeply $geo.locate( ip => '1.1.1.1' ), { ip => '::1.1.1.1' },
             'locate by ' ~ $size ~ ' bit pointer';
     }
+    
 }

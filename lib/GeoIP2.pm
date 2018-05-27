@@ -55,7 +55,7 @@ submethod BUILD ( Str:D :$path!, :$!debug = False ) {
         # for IPv4 in IPv6 subnet /96 contains 0s
         # so left node branch should be traversed 96 times
         for ^96 {
-            ( $!ipv4-start-node,  ) = self.read-node( index => $!ipv4-start-node );
+            ( $!ipv4-start-node,  ) = self!read-node( index => $!ipv4-start-node );
             last if $!ipv4-start-node >= $!node-count;
         }
     }
@@ -89,7 +89,7 @@ method locate ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
         last if $index >= $!node-count;
 
         # check which branch of binary tree should be traversed
-        my ( $left-pointer, $right-pointer ) = self.read-node( :$index );
+        my ( $left-pointer, $right-pointer ) = self!read-node( :$index );
         $index = $bit ?? $right-pointer !! $left-pointer;
 
         self!debug( :$index, :$bit ) if $.debug;
@@ -140,7 +140,7 @@ method !read-metadata ( ) returns Hash {
 }
 
 #| return two pointers for left and right tree branch
-method read-node ( Int:D :$index! ) returns List {
+method !read-node ( Int:D :$index! ) returns List {
     my ( $left-pointer, $right-pointer );
     
     # negative or too big index cannot be requested
