@@ -102,3 +102,5 @@ subtest 'record sizes' => sub {
     }
     
 }
+
+#$geo.locate( ip => '2001:0:101:120::');

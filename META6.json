@@ -5,7 +5,7 @@
     "description" : "MaxMind GeoIP v2 databases interface.",
     "authors" : [ "Paweł bbkr Pabian" ],
     "provides" : {
-        "GeoIP" : "lib/GeoIP2.pm"
+        "GeoIP2" : "lib/GeoIP2.pm"
     },
     "license" : "Artistic-2.0",
     "source-url" : "git://github.com/bbkr/GeoIP2.git"

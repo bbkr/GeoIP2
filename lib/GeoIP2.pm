@@ -26,6 +26,7 @@ has IO::Handle $!handle;
 class X::PathInvalid is Exception is export { };
 class X::MetaDataNotFound is Exception is export { };
 class X::NodeIndexOutOfRange is Exception is export { };
+class X::IPFormatInvalid is Exception is export { };
 
 submethod BUILD ( Str:D :$path!, :$!debug = False ) {
     
@@ -67,21 +68,32 @@ method description ( Str:D :$language = 'EN' ) {
     return %!descriptions{ $language.lc };
 }
 
-method locate ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
-
-    # convert octet form of IP into array of bits in big-endian order
+# locate IPv4
+multi method locate ( Str:D :$ip! where / ^ ( [ \d ** 1..3 ] ) ** 4 % '.' $ / ) {
     my @bits;
-    for $ip.comb( /\d+/ ) {
-        
-        # convert to bits
-        my @octet-bits = .Int.polymod( 2 xx * ).reverse;
-        
-        # append to flat bit array, zero pad byte from left if needed
-        push @bits, |( 0 xx ( 8 - +@octet-bits ) ), |@octet-bits;
-    }
-    self!debug( :@bits ) if $.debug;
     
-    my $index = $!ipv4-start-node;
+    for $/[0] -> Int( ) $octet {
+        
+        X::IPFormatInvalid.new( message => $ip ).throw( ) if $octet > 255;
+                
+        # convert to bits and append to flat bit array
+        push @bits, |$octet.polymod( 2 xx 7 ).reverse( );
+    }
+    
+    return self!read-ip( :@bits, index => $.ipv4-start-node );
+}
+
+# locate IPv6
+multi method locate ( Str:D :$ip! where / ^ ( [ <.xdigit> ** 0..4 ] ) ** 3..8 % ':' $ / ) {
+
+    say $/[0];
+
+}
+
+# find IP in binary tree and return geolocation info
+method !read-ip ( :@bits!, :$index is copy = 0 ) {
+    
+    self!debug( :@bits ) if $.debug;
     
     for @bits -> $bit {
         
