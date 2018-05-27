@@ -67,7 +67,7 @@ method description ( Str:D :$language = 'EN' ) {
     return %!descriptions{ $language.lc };
 }
 
-method read-location ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
+method locate ( Str:D :$ip! where / ^ [\d ** 1..3] ** 4 % '.' $ / ) {
 
     # convert octet form of IP into array of bits in big-endian order
     my @bits;

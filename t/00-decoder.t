@@ -62,7 +62,7 @@ subtest 'data types' => sub {
     # proper expected values copied from
     # https://github.com/maxmind/MaxMind-DB-Reader-perl/blob/master/t/MaxMind/DB/Reader-decoder.t
     
-    my %got = $geo.read-location( ip => '0.0.0.0' );
+    my %got = $geo.locate( ip => '0.0.0.0' );
     my %expected = (
         'array' => [ ],
         'boolean' => False,
@@ -79,7 +79,7 @@ subtest 'data types' => sub {
     );
     is-deeply %got, %expected, 'empty or zero';
     
-    %got = $geo.read-location( ip => '1.1.1.0' );
+    %got = $geo.locate( ip => '1.1.1.0' );
     %expected = (
         'array' => [ 1, 2, 3 ],
         'boolean' => True,
@@ -112,7 +112,7 @@ subtest 'record sizes' => sub {
     
         $geo = GeoIP2.new( path => './t/databases/MaxMind-DB-test-mixed-' ~ $size ~ '.mmdb' );
         
-        is-deeply $geo.read-location( ip => '1.1.1.1' ), { ip => '::1.1.1.1' },
+        is-deeply $geo.locate( ip => '1.1.1.1' ), { ip => '::1.1.1.1' },
             'locate by ' ~ $size ~ ' bit pointer';
     }
 }
