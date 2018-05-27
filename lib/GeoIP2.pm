@@ -62,7 +62,7 @@ submethod BUILD ( Str:D :$path!, :$!debug = False ) {
 }
 
 #| return description in requested language ( if available )
-method description ( Str:D $language = 'EN' ) {
+method description ( Str:D :$language = 'EN' ) {
 
     return %!descriptions{ $language.lc };
 }

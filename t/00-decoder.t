@@ -29,9 +29,9 @@ subtest 'metadata' => sub {
     is $geo.database-type, 'MaxMind DB Decoder Test', 'database type';
     is $geo.description, 'MaxMind DB Decoder Test database - contains every MaxMind DB data type',
         'description in default language';
-    is $geo.description( 'EN' ), 'MaxMind DB Decoder Test database - contains every MaxMind DB data type',
+    is $geo.description( language => 'EN' ), 'MaxMind DB Decoder Test database - contains every MaxMind DB data type',
         'description in existing language';
-    is $geo.description( 'XX' ), Any, 'description in missing language';
+    is $geo.description( language => 'XX' ), Any, 'description in missing language';
     is $geo.ip-version, v6, 'ip version';
     is $geo.ipv4-start-node, 96, 'IPv4 start node';
     is $geo.languages, [ 'EN' ], 'languages';
