@@ -150,62 +150,31 @@ method read-node ( Int:D :$index! ) returns List {
     # position cursor at the beginnig of node index
     $!handle.seek( $index * $!node-byte-size, SeekFromBeginning );
     
-    # read all index bytes
-    my $bytes = $!handle.read( $!node-byte-size );
-    
     given $!record-size {
     
         when 24 {
             
-            # extract left side bits 23...16, 15...8 and 7...0 from left bytes
-            $left-pointer = 0;
-            for 0..2 {
-                $left-pointer +<= 8;
-                $left-pointer +|= $bytes[ $_ ];
-            }
-            
-            # extract right side bits 23...16, 15...8 and 7...0 from right bytes
-            $right-pointer = 0;
-            for 3..5 {
-                $right-pointer +<= 8;
-                $right-pointer +|= $bytes[ $_ ];
-            }
+            # read two 24 bit pointers
+            $left-pointer = self!read-unsigned-integer( size => 3 );
+            $right-pointer = self!read-unsigned-integer( size => 3 );
             
         }
         when 28 {
             
-            # extract left side bits 27...24 from middle byte
-            $left-pointer = $bytes[ 3 ] +> 4;
-            # merge with left side bits 23...16, 15...8 and 7...0 from left bytes
-            for 0..2 {
-                $left-pointer +<= 8;
-                $left-pointer +|= $bytes[ $_ ];
-            }
-        
-            # extract right side bits 27...24 from middle byte
-            $right-pointer = $bytes[ 3 ] +& 0x0F;
-            # merge with right side bits 23...16, 15...8 and 7...0 from right bytes
-            for 4..6 {
-                $right-pointer +<= 8;
-                $right-pointer +|= $bytes[ $_ ];
-            }
+            # bits 27...24 are taken from middle byte
+            $left-pointer = self!read-unsigned-integer( size => 3 );
+            my $middle-byte = $!handle.read( 1 )[ 0 ];
+            $right-pointer = self!read-unsigned-integer( size => 3 );
+            
+            $left-pointer += ( $middle-byte +> 4 ) +< 24;
+            $right-pointer += ( $middle-byte +& 0x0F ) +< 24;
             
         }
         when 32 {
             
-            # extract left side bits 31..24, 23...16, 15...8 and 7...0 from left bytes
-            $left-pointer = 0;
-            for 0..3 {
-                $left-pointer +<= 8;
-                $left-pointer +|= $bytes[ $_ ];
-            }
-            
-            # extract right side bits 31..24, 23...16, 15...8 and 7...0 from right bytes
-            $right-pointer = 0;
-            for 4..7 {
-                $right-pointer +<= 8;
-                $right-pointer +|= $bytes[ $_ ];
-            }
+            # read two 32 bit pointers
+            $left-pointer = self!read-unsigned-integer( size => 4 );
+            $right-pointer = self!read-unsigned-integer( size => 4 );
             
         }
         default {
@@ -288,19 +257,15 @@ method !read-pointer ( Int:D :$control-byte! ) returns Int {
     my $type = ( $control-byte +& 0b00011000 ) +> 3;
     
     # for "small" pointers bits 2..0 of control byte are used
+    # and then following bytes
     if $type ~~ 0 | 1 | 2 {
-        $pointer = $control-byte +& 0b00000111;
+        $pointer = ( $control-byte +& 0b00000111 ) +< ( ( $type + 1 ) * 8 );
+        $pointer += self!read-unsigned-integer( size => $type + 1 );
     }
     # for "big" pointer control byte bits are ignored
+    # pointer is constructed entirely from following bytes
     else {
-        $pointer = 0;
-    }
-    
-    # type maps directly to amount of following bytes
-    # required to construct pointer
-    for $!handle.read( $type + 1 ) -> $byte {
-        $pointer +<= 8;
-        $pointer +|= $byte;
+        $pointer = self!read-unsigned-integer( size => $type + 1 );
     }
     
     # some types have fixed value added
@@ -327,20 +292,11 @@ method !read-size ( Int:D :$control-byte! ) returns Int {
     return $size if $size < 29;
 
     # size is stored in next bytes
-    if ( $size == 29 ) {
-        return 29 + $!handle.read( 1 )[ 0 ];
+    given $size {
+        when 29 { return 29 + $!handle.read( 1 )[ 0 ] };
+        when 30 { return 285 + self!read-unsigned-integer( size => 2 ) };
+        default { return 65821 + self!read-unsigned-integer( size => 4 ) }
     }
-    
-    die "Size $size NYI!";
-    
-    # elsif ( $size == 30 ) {
-    #     $size = 285 + unpack( 'n', $buffer );
-    # }
-    # else {
-    #     $size = 65821 + unpack( 'N', $self->_zero_pad_left( $buffer, 4 ) );
-    # }
-    #
-    # return ( $size, $offset + $bytes_to_read );
 }
 
 method !read-string ( Int:D :$size! ) returns Str {
@@ -366,15 +322,18 @@ method !read-unsigned-integer ( Int:D :$size! ) returns Int {
 method !read-signed-integer ( Int:D :$size! ) returns Int {
     my $out = 0;
     
+    # empty size means 0 value
     return $out unless $size;
+    
+    # negative numbrs are given in two's complement format
+    # but only when all 4 bytes are given leftmost bit decides about sign -
+    # otherwise zero padding is assumed and integer is positive
+    return self!read-unsigned-integer( :$size ) if $size < 4;
     
     my $bytes = $!handle.read( $size );
     
-    # two's complement format:
-    # leftmost bit decides about sign
-    # (but only when all 4 bytes are given)
     my $sign;
-    if $size == 4 and $bytes[0] +& 0b10000000 == 128 {
+    if $bytes[0] +& 0b10000000 == 128 {
         $sign = -1;
     }
     else {
