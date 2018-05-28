@@ -68,7 +68,7 @@ method description ( Str:D :$language = 'EN' ) {
     return %!descriptions{ $language.lc };
 }
 
-# locate IPv4
+# locate IPv4 in dotted decimal notation
 multi method locate ( Str:D :$ip! where / ^ ( [ \d ** 1..3 ] ) ** 4 % '.' $ / ) {
     my @bits;
     
@@ -76,18 +76,24 @@ multi method locate ( Str:D :$ip! where / ^ ( [ \d ** 1..3 ] ) ** 4 % '.' $ / ) 
         
         X::IPFormatInvalid.new( message => $ip ).throw( ) if $octet > 255;
                 
-        # convert to bits and append to flat bit array
+        # convert decimal to bits and append to flat bit array
         push @bits, |$octet.polymod( 2 xx 7 ).reverse( );
     }
     
     return self!read-ip( :@bits, index => $.ipv4-start-node );
 }
 
-# locate IPv6
-multi method locate ( Str:D :$ip! where / ^ ( [ <.xdigit> ** 0..4 ] ) ** 3..8 % ':' $ / ) {
-
-    say $/[0];
-
+# locate IPv6 in hexadecimal notattion
+multi method locate ( Str:D :$ip! where / ^ ( [ <.xdigit> ** 1..4 ] ) ** 8 % ':' $ / ) {
+    my @bits;
+    
+    for $/[0] -> Str( ) $octet {
+        
+        # convert hexadecimal to bits and append to flat bit array
+        push @bits, |:16($octet).polymod( 2 xx 15 ).reverse( );
+    }
+    
+    return self!read-ip( :@bits );
 }
 
 # find IP in binary tree and return geolocation info

@@ -3,7 +3,7 @@ use lib 'lib';
 use Test;
 use GeoIP2;
 
-plan 8;
+plan 9;
 
 dies-ok { GeoIP2.new }, 'file path is required';
 
@@ -44,6 +44,8 @@ subtest 'metadata' => sub {
 
 subtest 'data types' => sub {
 
+    plan 2;
+    
     # proper expected values copied from
     # https://github.com/maxmind/MaxMind-DB-Reader-perl/blob/master/t/MaxMind/DB/Reader-decoder.t
     
@@ -93,14 +95,31 @@ subtest 'data types' => sub {
 
 subtest 'record sizes' => sub {
 
+    plan 6;
+
     for 24, 28, 32 -> $size {
     
         $geo = GeoIP2.new( path => './t/databases/MaxMind-DB-test-mixed-' ~ $size ~ '.mmdb' );
         
         is-deeply $geo.locate( ip => '1.1.1.1' ), { ip => '::1.1.1.1' },
-            'locate by ' ~ $size ~ ' bit pointer';
+            'locate IPv4 by ' ~ $size ~ ' bit pointer';
+            
+        is-deeply $geo.locate( ip => '2001:0:101:120:0:0:0:0' ), { ip => '::1.1.1.32' },
+            'locate IPv6 by ' ~ $size ~ ' bit pointer';
     }
     
 }
 
-#$geo.locate( ip => '2001:0:101:120::');
+subtest 'location not found' => sub {
+
+    plan 2;
+
+    $geo = GeoIP2.new( path => './t/databases/MaxMind-DB-test-mixed-24.mmdb' );
+        
+    is-deeply $geo.locate( ip => '6.6.6.6' ), Nil,
+        'locate IPv4';
+    
+    is-deeply $geo.locate( ip => '6:6:6:6:6:6:6:6' ), Nil,
+        'locate IPv6';
+    
+}
