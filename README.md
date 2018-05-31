@@ -1,4 +1,4 @@
-# MaxMind GeoIP v2 libraries interface
+# MaxMind GeoIP v2 libraries reader
 
 [![Build Status](https://travis-ci.org/bbkr/GeoIP2.svg?branch=master)](https://travis-ci.org/bbkr/GeoIP2)
 
@@ -153,9 +153,10 @@ $geo.debug = True;
 
 ## COPYRIGHTS
 
-This third party driver is released under Artistic-2.0 license
+This third party reader is released under Artistic-2.0 license
 and is based on [open source database spec](https://github.com/maxmind/MaxMind-DB) released under Creative Commons license.
 Which means you can use it to read GeoIP2 free and paid databases both for personal and commercial use.
 
 However keep in mind that MaxMind® and GeoIP® [are trademarks](https://www.maxmind.com/en/terms_of_use)
-so if you want to fork this module do it [under your own authority](https://docs.perl6.org/language/typesystem#Versioning_and_Authorship) to avoid confusion.
+so if you want to fork this module do it [under your own authority](https://docs.perl6.org/language/typesystem#Versioning_and_Authorship)
+to avoid confusion with their official libraries.
