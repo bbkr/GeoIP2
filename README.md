@@ -110,7 +110,7 @@ GeoIP2.new( path => './GeoIP2-City.mmdb' ).locate( ip => '78.31.153.58' );
     ...
 }
 ```
-In such case list of available languages can be also checked through `languages` attribute.
+In such case list of available languages can be also checked through [languages](#languages) attribute.
 
 ## ATTRIBUTES
 
@@ -129,7 +129,7 @@ Set object representing languages that location names are translated to.
 ### description / description( 'RU' )
 
 String describing database kind, for example `GeoIP2 ISP database`.
-Default is English but it may be requested in any of the supported languages.
+Default is English but it may be requested in any of the [supported languages](#languages).
 
 ### binary-format-version / database-type / ipv4-start-node / node-byte-size / node-count / record-size / search-tree-size
 
