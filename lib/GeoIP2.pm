@@ -87,10 +87,10 @@ multi method locate ( Str:D :$ip! where / ^ ( [ \d ** 1..3 ] ) ** 4 % '.' $ / ) 
 multi method locate ( Str:D :$ip! where / ^ ( [ <.xdigit> ** 1..4 ] ) ** 8 % ':' $ / ) {
     my @bits;
     
-    for $/[0] -> Str( ) $octet {
+    for $/[0] -> Str( ) $hextet {
         
         # convert hexadecimal to bits and append to flat bit array
-        push @bits, |:16($octet).polymod( 2 xx 15 ).reverse( );
+        push @bits, |:16( $hextet ).polymod( 2 xx 15 ).reverse( );
     }
     
     return self!read-ip( :@bits );
