@@ -26,9 +26,9 @@ Reader for [MaxMind databases](https://www.maxmind.com/en/geoip2-databases) incl
     
     # show database information
     say $geo.build-timestamp;
-    say $.ip-version;
-    say $.languages;
-    say $.description;
+    say $geo.ip-version;
+    say $geo.languages;
+    say $geo.description;
 ```
 
 ## METHODS
@@ -45,12 +45,12 @@ IP can be given as:
 * IPv4 dotted decimal format - `8.8.8.8`
 * IPv6 full format - `2001:4860:4860:0000:0000:0000:0000:8888`
 * IPv6 without leading zeroes - `2001:4860:4860:0:0:0:0:8888`
-(IPv6 compressed format - `2001:4860:4860::8888` - is not yet supported)
+* (IPv6 compressed format - `2001:4860:4860::8888` - is not yet supported)
 
 Note that returned data structure is specific for opened databse type,
 for example ISP database returns:
 
-```
+```perl6
 GeoIP2.new( path => './GeoIP2-ISP.mmdb' ).locate( ip => '78.31.153.58' );
 
 {
@@ -63,7 +63,7 @@ GeoIP2.new( path => './GeoIP2-ISP.mmdb' ).locate( ip => '78.31.153.58' );
 
 Sometimes returned values are localized, like in City database:
 
-```
+```perl6
 GeoIP2.new( path => './GeoIP2-City.mmdb' ).locate( ip => '78.31.153.58' );
 
 {
@@ -142,7 +142,7 @@ Geeky stuff.
 Helpful for investigating IP loation and data decoding issues.
 Can be passed in constructor or turned `True` / `False` at any time:
 
-```
+```perl6
 my $geo = GeoIP2.new( path => '/home/me/Database.mmdb', :debug );
 ...
 $geo.debug = False;
