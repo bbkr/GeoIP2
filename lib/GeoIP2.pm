@@ -1,4 +1,4 @@
-unit class GeoIP2;
+unit class GeoIP2:auth<bbkr>:ver<1.0.0>;
 
 # only for IEEE conversions
 use NativeCall;
