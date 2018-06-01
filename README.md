@@ -9,8 +9,8 @@ Reader for [MaxMind databases](https://www.maxmind.com/en/geoip2-databases) incl
 * ISP
 * Domain
 * Connection Type
+* in any distribution form ( Lite, Pro, Enterprise )
 * and any other database in [*.mmdb 2.0 format](https://github.com/maxmind/MaxMind-DB/blob/master/MaxMind-DB-spec.md)
-* or in any distribution form ( Lite, regular, Enterprise )
 
 ## SYNOPSIS
 
