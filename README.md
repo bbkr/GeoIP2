@@ -10,6 +10,7 @@ Reader for [MaxMind databases](https://www.maxmind.com/en/geoip2-databases) incl
 * Domain
 * Connection Type
 * and any other database in [*.mmdb 2.0 format](https://github.com/maxmind/MaxMind-DB/blob/master/MaxMind-DB-spec.md)
+* in any distribution form (Lite, regular, Enterprise)
 
 ## SYNOPSIS
 
@@ -150,6 +151,58 @@ $geo.debug = False;
 $geo.debug = True;
 ...
 ```
+
+## REQUIREMENTS
+
+This is Pure Perl module - C maxminddb library is not required.
+Here is how to start with free GeoIP Lite libraries right away:
+
+### MacOS
+
+* Install [HomeBrew](https://brew.sh).
+
+In terminal:
+
+* Install tool to fetch databases - `brew install geoipupdate`.
+* Fetch databases - `geoipupdate` (may take a while).
+
+In code:
+
+```perl6
+my $geo = GeoIP2.new( path => '/usr/local/var/GeoIP/GeoLite2-City.mmdb' );
+say $geo.locate( ip => '8.8.8.8' );
+```
+
+### Ubuntu Linux and derivatives
+
+In terminal:
+
+* Install tool to fetch databases - `sudo apt-get install geoipupdate`.
+* Fetch databases - `sudo geoipupdate` (may take a while).
+
+In code:
+
+```perl6
+my $geo = GeoIP2.new( path => '/var/lib/GeoIP/GeoLite2-City.mmdb' );
+say $geo.locate( ip => '8.8.8.8' );
+```
+
+### Arch Linux and derivatives
+
+In terminal:
+
+* Install prepackaged databases - `pacman -Syu geoip2-database`.
+
+In code:
+
+```perl6
+my $geo = GeoIP2.new( path => '/usr/share/GeoIP/GeoLite2-City.mmdb' );
+say $geo.locate( ip => '8.8.8.8' );
+```
+
+Note that `geoipupdate` tool method is also possible,
+but because Arch is a rolling release distro installing prepackaged databases
+provides the same frequency of database updates as fetching direcltly from MaxMind.
 
 ## COPYRIGHTS
 
