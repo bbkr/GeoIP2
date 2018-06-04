@@ -128,12 +128,12 @@ method !read-metadata ( ) returns Hash {
 
     # constant sequence of bytes that separates IP data from metadata
     state $metadata-marker = Buf.new( 0xAB, 0xCD, 0xEF ) ~ 'MaxMind.com'.encode( );
-
+    
+    # jump to EOF
+    $!handle.seek( 0, SeekFromEnd );
+    
     # position cursor after last occurrence of marker
     loop {
-        
-        # jump to EOF
-        FIRST $!handle.seek( 0, SeekFromEnd );
         
         # check if BOF is reached before marker is found
         X::MetaDataNotFound.new.throw unless $!handle.tell > 0;
