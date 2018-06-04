@@ -380,8 +380,8 @@ method !read-floating-number ( Int:D :$size! ) {
     $bytes .= reverse( ) if $is-little-endian;
     
     given $size {
-        when 4 { return nativecast( Pointer[ num32 ], $bytes ).deref( ) }
-        when 8 { return nativecast( Pointer[ num64 ], $bytes ).deref( ) }
+        when 4 { return nativecast( ( num32 ), $bytes ) }
+        when 8 { return nativecast( ( num64 ), $bytes ) }
         default {
             X::NYI.new( feature => 'IEEE754 of size ' ~ $size ).throw( )
         }
