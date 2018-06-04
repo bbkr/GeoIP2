@@ -69,7 +69,7 @@ method description ( Str:D :$language = 'EN' ) {
 }
 
 # locate IPv4 in dotted decimal notation
-multi method locate ( Str:D :$ip! where / ^ ( [ \d ** 1..3 ] ) ** 4 % '.' $ / ) {
+multi method locate ( Str:D :$ip! where / ^ ( [ <[ 0..9 ]> ** 1..3 ] ) ** 4 % '.' $ / ) {
     my @bits;
     
     for $/[0] -> Int( ) $octet {
