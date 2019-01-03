@@ -1,8 +1,5 @@
 unit class GeoIP2:auth<bbkr>:ver<1.0.0>;
 
-# only for IEEE conversions
-use NativeCall;
-
 # debug flag,
 # can be turned  on and off at any time
 has Bool $.debug is rw;
@@ -22,13 +19,6 @@ has Int         $.search-tree-size;
 
 # *.mmdb file decriptor
 has IO::Handle $!handle;
-
-# native casting is used to convert Buf to numeric formats
-# so if local architecture does not match big endian file format
-# then byte order must be reversed based on this flag
-has $!is-big-endian = nativecast(
-    CArray[ uint8 ], CArray[ uint32 ].new( 1 )
-)[ 0 ] != 0x01;
 
 class X::PathInvalid is Exception is export { };
 class X::MetaDataNotFound is Exception is export { };
@@ -271,7 +261,7 @@ method !read-data ( ) {
     return $out;
 }
 
-method !read-pointer ( Int:D :$control-byte! ) returns Int {
+method !read-pointer ( Int:D :$control-byte! ) returns Int:D {
     my $pointer;
     
     # constant sequence of bytes that separates nodes from data
@@ -308,7 +298,7 @@ method !read-pointer ( Int:D :$control-byte! ) returns Int {
 }
 
 #| check how big is next data chunk
-method !read-size ( Int:D :$control-byte! ) returns Int {
+method !read-size ( Int:D :$control-byte! ) returns Int:D {
 
     # last 5 bits of control byte describe container size
     my $size = $control-byte +& 0b00011111;
@@ -324,13 +314,13 @@ method !read-size ( Int:D :$control-byte! ) returns Int {
     }
 }
 
-method !read-string ( Int:D :$size! ) returns Str {
+method !read-string ( Int:D :$size! ) returns Str:D {
     
     return '' unless $size;
     return $!handle.read( $size ).decode( );
 }
 
-method !read-unsigned-integer ( Int:D :$size! ) returns Int {
+method !read-unsigned-integer ( Int:D :$size! ) returns Int:D {
     
     # zero size means value 0
     return 0 unless $size;
@@ -347,7 +337,7 @@ method !read-unsigned-integer ( Int:D :$size! ) returns Int {
     }
 }
 
-method !read-signed-integer ( Int:D :$size! ) returns Int {
+method !read-signed-integer ( Int:D :$size! ) returns Int:D {
     
     # empty size means 0 value
     return 0 unless $size;
@@ -360,21 +350,20 @@ method !read-signed-integer ( Int:D :$size! ) returns Int {
     return $!handle.read( $size ).read-int32( 0, BigEndian );
 }
 
-method !read-floating-number ( Int:D :$size! ) {
+method !read-floating-number ( Int:D :$size! ) returns Num:D {
     
     my $bytes = $!handle.read( $size );
-    $bytes = $bytes.reverse( ) unless $!is-big-endian;
     
     given $size {
-        when 4 { return nativecast( ( num32 ), $bytes ) }
-        when 8 { return nativecast( ( num64 ), $bytes ) }
+        when 4 { return $bytes.read-num32( 0, BigEndian ) }
+        when 8 { return $bytes.read-num64( 0, BigEndian ) }
         default {
             X::NYI.new( feature => 'IEEE754 of size ' ~ $size ).throw( )
         }
     }
 }
 
-method !read-boolean ( Int:D :$size! ) returns Bool {
+method !read-boolean ( Int:D :$size! ) returns Bool:D {
     
     # non zero size means True,
     # there is no additional data required to decode value
@@ -404,7 +393,7 @@ method !read-hash ( Int:D :$size! ) returns Hash {
     return %out;
 }
 
-method !read-raw-bytes ( Int:D :$size! ) returns Buf {
+method !read-raw-bytes ( Int:D :$size! ) returns Buf:D {
     
     return Buf.new unless $size;
     return $!handle.read( $size );
