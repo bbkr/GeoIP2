@@ -331,17 +331,20 @@ method !read-string ( Int:D :$size! ) returns Str {
 }
 
 method !read-unsigned-integer ( Int:D :$size! ) returns Int {
-    my $out = 0;
     
     # zero size means value 0
-    return $out unless $size;
+    return 0 unless $size;
     
-    for $!handle.read( $size ) -> $byte {
-        $out +<= 8;
-        $out +|= $byte;
+    my $bytes = $!handle.read( $size );
+    
+    given $size {
+        when 1 { return $bytes[ 0 ] }
+        when 2 { return $bytes.read-uint16( 0, BigEndian ) }
+        when 3 { return ( $bytes.read-uint16( 0, BigEndian ) +< 8 ) + $bytes[ 2 ] }
+        when 4 { return $bytes.read-uint32( 0, BigEndian ) }
+        when 8 { return $bytes.read-uint64( 0, BigEndian ) }
+        when 16 { return $bytes.read-uint128( 0, BigEndian ) }
     }
-    
-    return $out;
 }
 
 method !read-signed-integer ( Int:D :$size! ) returns Int {
@@ -354,10 +357,7 @@ method !read-signed-integer ( Int:D :$size! ) returns Int {
     # otherwise zero padding is assumed and integer is positive
     return self!read-unsigned-integer( :$size ) if $size < 4;
     
-    my $bytes = $!handle.read( $size );
-    $bytes = $bytes.reverse( ) unless $!is-big-endian;
-    
-    return nativecast( ( int32 ), $bytes );
+    return $!handle.read( $size ).read-int32( 0, BigEndian );
 }
 
 method !read-floating-number ( Int:D :$size! ) {
