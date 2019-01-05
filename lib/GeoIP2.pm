@@ -402,7 +402,7 @@ method !read-hash ( Int:D :$size! ) returns Hash {
     return %out;
 }
 
-method !read-raw-bytes ( Int:D :$size! ) returns Buf {
+method !read-raw-bytes ( Int:D :$size! ) returns Buf:D {
     
     return Buf.new unless $size;
     return $!handle.read( $size );
