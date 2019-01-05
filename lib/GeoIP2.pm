@@ -104,7 +104,7 @@ multi method locate ( Str:D :$ip! where / ^ ( <.xdigit> ** 1..4 ) ** 8 % ':' $ /
 }
 
 # find IP in binary tree and return geolocation info
-method !read-ip ( :@bits!, :$index is copy = 0 ) {
+method !read-ip ( :@bits!, Int:D :$index is copy = 0 ) {
     
     self!debug( :@bits ) if $.debug;
     
@@ -271,7 +271,7 @@ method !read-data ( ) {
     return $out;
 }
 
-method !read-pointer ( Int:D :$control-byte! ) returns Int {
+method !read-pointer ( Int:D :$control-byte! ) returns Int:D {
     my $pointer;
     
     # constant sequence of bytes that separates nodes from data
@@ -308,7 +308,7 @@ method !read-pointer ( Int:D :$control-byte! ) returns Int {
 }
 
 #| check how big is next data chunk
-method !read-size ( Int:D :$control-byte! ) returns Int {
+method !read-size ( Int:D :$control-byte! ) returns Int:D {
 
     # last 5 bits of control byte describe container size
     my $size = $control-byte +& 0b00011111;
@@ -324,13 +324,13 @@ method !read-size ( Int:D :$control-byte! ) returns Int {
     }
 }
 
-method !read-string ( Int:D :$size! ) returns Str {
+method !read-string ( Int:D :$size! ) returns Str:D {
     
     return '' unless $size;
     return $!handle.read( $size ).decode( );
 }
 
-method !read-unsigned-integer ( Int:D :$size! ) returns Int {
+method !read-unsigned-integer ( Int:D :$size! ) returns Int:D {
     my $out = 0;
     
     # zero size means value 0
@@ -344,7 +344,7 @@ method !read-unsigned-integer ( Int:D :$size! ) returns Int {
     return $out;
 }
 
-method !read-signed-integer ( Int:D :$size! ) returns Int {
+method !read-signed-integer ( Int:D :$size! ) returns Int:D {
     
     # empty size means 0 value
     return 0 unless $size;
@@ -360,7 +360,7 @@ method !read-signed-integer ( Int:D :$size! ) returns Int {
     return nativecast( ( int32 ), $bytes );
 }
 
-method !read-floating-number ( Int:D :$size! ) {
+method !read-floating-number ( Int:D :$size! ) returns Num:D {
     
     my $bytes = $!handle.read( $size );
     $bytes = $bytes.reverse( ) unless $!is-big-endian;
@@ -374,7 +374,7 @@ method !read-floating-number ( Int:D :$size! ) {
     }
 }
 
-method !read-boolean ( Int:D :$size! ) returns Bool {
+method !read-boolean ( Int:D :$size! ) returns Bool:D {
     
     # non zero size means True,
     # there is no additional data required to decode value
