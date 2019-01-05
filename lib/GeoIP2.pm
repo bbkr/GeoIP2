@@ -83,6 +83,7 @@ multi method locate ( Str:D :$ip! where / ^ ( <[ 0..9 ]> ** 1..3 ) ** 4 % '.' $ 
         
         X::IPFormatInvalid.new( message => $ip ).throw( ) if $octet > 255;
                 
+        my @octet = $octet.base( 2 ).comb;  
         # convert decimal to bits and append to flat bit array
         push @bits, |$octet.polymod( 2 xx 7 ).reverse( );
     }
@@ -90,7 +91,7 @@ multi method locate ( Str:D :$ip! where / ^ ( <[ 0..9 ]> ** 1..3 ) ** 4 % '.' $ 
     return self!read-ip( :@bits, index => $.ipv4-start-node );
 }
 
-# locate IPv6 in hexadecimal notattion
+# locate IPv6 in hexadecimal notation
 multi method locate ( Str:D :$ip! where / ^ ( <.xdigit> ** 1..4 ) ** 8 % ':' $ / ) {
     my @bits;
     
