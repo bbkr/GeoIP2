@@ -82,8 +82,7 @@ multi method locate ( Str:D :$ip! where / ^ ( <[ 0..9 ]> ** 1..3 ) ** 4 % '.' $ 
     for $/[0] -> Int( ) $octet {
         
         X::IPFormatInvalid.new( message => $ip ).throw( ) if $octet > 255;
-                
-        my @octet = $octet.base( 2 ).comb;  
+        
         # convert decimal to bits and append to flat bit array
         push @bits, |$octet.polymod( 2 xx 7 ).reverse( );
     }
