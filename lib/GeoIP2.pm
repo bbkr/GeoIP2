@@ -386,8 +386,7 @@ method !read-array ( Int:D :$size! ) returns Array {
     my @out;
     
     for ^$size {
-        my $value = self!read-data( );
-        @out.push: $value;
+        @out.push: self!read-data( );
     }
 
     return @out;
@@ -398,8 +397,7 @@ method !read-hash ( Int:D :$size! ) returns Hash {
     
     for ^$size {
         my $key = self!read-data( );
-        my $value = self!read-data( );
-        %out{ $key } = $value;
+        %out{ $key } = self!read-data( );
     }
 
     return %out;
