@@ -1,7 +1,4 @@
-unit class GeoIP2:auth<bbkr>:ver<1.0.0>;
-
-# only for IEEE conversions
-use NativeCall;
+unit class GeoIP2:auth<bbkr>:ver<1.1.0>;
 
 # debug flag,
 # can be turned  on and off at any time
@@ -22,13 +19,6 @@ has Int         $.search-tree-size;
 
 # *.mmdb file decriptor
 has IO::Handle $!handle;
-
-# native casting is used to convert Buf to numeric formats
-# so if local architecture does not match big endian file format
-# then byte order must be reversed based on this flag
-has $!is-big-endian = nativecast(
-    CArray[ uint8 ], CArray[ uint32 ].new( 1 )
-)[ 0 ] != 0x01;
 
 class X::PathInvalid is Exception is export { };
 class X::MetaDataNotFound is Exception is export { };
@@ -331,17 +321,20 @@ method !read-string ( Int:D :$size! ) returns Str:D {
 }
 
 method !read-unsigned-integer ( Int:D :$size! ) returns Int:D {
-    my $out = 0;
     
     # zero size means value 0
-    return $out unless $size;
+    return 0 unless $size;
     
-    for $!handle.read( $size ) -> $byte {
-        $out +<= 8;
-        $out +|= $byte;
+    my $bytes = $!handle.read( $size );
+    
+    given $size {
+        when 1 { return $bytes[ 0 ] }
+        when 2 { return $bytes.read-uint16( 0, BigEndian ) }
+        when 3 { return ( $bytes.read-uint16( 0, BigEndian ) +< 8 ) + $bytes[ 2 ] }
+        when 4 { return $bytes.read-uint32( 0, BigEndian ) }
+        when 8 { return $bytes.read-uint64( 0, BigEndian ) }
+        when 16 { return $bytes.read-uint128( 0, BigEndian ) }
     }
-    
-    return $out;
 }
 
 method !read-signed-integer ( Int:D :$size! ) returns Int:D {
@@ -354,20 +347,16 @@ method !read-signed-integer ( Int:D :$size! ) returns Int:D {
     # otherwise zero padding is assumed and integer is positive
     return self!read-unsigned-integer( :$size ) if $size < 4;
     
-    my $bytes = $!handle.read( $size );
-    $bytes = $bytes.reverse( ) unless $!is-big-endian;
-    
-    return nativecast( ( int32 ), $bytes );
+    return $!handle.read( $size ).read-int32( 0, BigEndian );
 }
 
 method !read-floating-number ( Int:D :$size! ) returns Num:D {
     
     my $bytes = $!handle.read( $size );
-    $bytes = $bytes.reverse( ) unless $!is-big-endian;
     
     given $size {
-        when 4 { return nativecast( ( num32 ), $bytes ) }
-        when 8 { return nativecast( ( num64 ), $bytes ) }
+        when 4 { return $bytes.read-num32( 0, BigEndian ) }
+        when 8 { return $bytes.read-num64( 0, BigEndian ) }
         default {
             X::NYI.new( feature => 'IEEE754 of size ' ~ $size ).throw( )
         }
