@@ -305,5 +305,5 @@ and is based on [open source database spec](https://github.com/maxmind/MaxMind-D
 Which means you can use it to read GeoIP2 free and paid databases both for personal and commercial use.
 
 However keep in mind that MaxMind® and GeoIP® [are trademarks](https://www.maxmind.com/en/terms_of_use)
-so if you want to fork this module do it [under your own authority](https://docs.perl6.org/language/typesystem#Versioning_and_Authorship)
+so if you want to fork this module do it [under your own authority](https://docs.perl6.org/language/typesystem#Versioning_and_authorship)
 to avoid confusion with their official libraries.
