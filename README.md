@@ -225,78 +225,65 @@ provides the same frequency of database updates as fetching direcltly from MaxMi
 ## TRANSLATIONS
 
 Some databases have built-in translations, however set of supported languages is rather limited.
-Fortunately MaxMind provides additional translation data.
+Additional translations can be obtained from [GeoNames.org](https://geonames.org) by using `geoname_id` column from results.
 
-Download [this file](http://www.maxmind.com/GeoIPLocationCSV-localized.zip).
-Inside ZIP there are few CSV files and README file with their description.
+The easiest way to do that is to download [this file](http://download.geonames.org/export/dump/alternateNamesV2.zip).
+Inside ZIP archive there is tab-separated `alternateNamesV2.txt` file, where:
 
-Now all you have to do is to find `geoname_id` field
-returned by [locate()](#locate-ip--1111-) method in correspoding CSV file,
-for example:
+* second column is `geoname_id`
+* third column may contain 2 or 3 letter lowercased ISO-639 language code
+* fourth column contains traslation
+* fifth column contains 1 if name is official, otherwise it is empty
 
-Country, second column is language code.
+So if you need for example Hungarian translation for country from example above you can extract it:
+
 ```
-$ grep 798544 iso-3166-localized.csv
-PL,ne,"पोल्याण्ड",798544
-PL,ki,Polandi,798544
-PL,tr,Polonya,798544
-PL,da,Polen,798544
-PL,my,"ပိုလန်",798544
-PL,ug,"پولشا",798544
-PL,gl,Polonia,798544
-PL,ro,Polonia,798544
-...
+$ cat alternateNamesV2.txt | awk -F "\t" '{ if ( $2 == 798544 && $3 == "hu" ) print $4 }'
+Lengyelország
 ```
 
-City, second column is language code.
+Sometimes there are few translations in the same language:
+
 ```
-$ grep 3099434 GeoIPCity-localized.csv
-35601,ascii,Gdansk,3099434
-35601,tr,Gdansk,3099434
-35601,da,"Gdańsk",3099434
-35601,gl,Gdansk,3099434
-35601,ru,"Гданьск",3099434
-35601,ro,"Gdańsk",3099434
-35601,az,Qdansk,3099434
-35601,co,Gdansk,3099434
-...
+$ cat alternateNamesV2.txt | awk -F "\t" '{ if ( $2 == 798544 && $3 == "en" ) print $4 }'
+Poland
+Republic of Poland
 ```
 
-Region (subdivision), third column is language code.
+Usually one of them will be marked as "official" (fifth column),
+so you can treat such translation with higher priority.
+
+### Native names
+
+Unfortunately there is no indicator which translation is native for which `geoname_id`.
+First you have to check which langauge is used in given country and then find translation in that language.
+
+But beware, there are some countries with more than one official language so you may get more than one native name.
+It is up to you to decide how to handle such cases.
+
+### Caching ideas
+
+For fast access you may want to preload those translations into some fast database, for example Redis.
+Let's say you need Swedish translations (language code is `SV`).
+
+Feed unofficial names first (fifth column empty):
 ```
-$ grep 3337496 region-code-localized.csv
-PL,82,af,Pommere,3337496
-PL,82,es,Pomerania,3337496
-PL,82,da,Pomorskie,3337496
-PL,82,ru,"Поморское воеводство",3337496
-PL,82,csb,"Pòmòrsczé wòjewództwò",3337496
-PL,82,fr,"Voïvodie de Poméranie",3337496
-PL,82,ro,"Voievodatul Pomerania",3337496
-PL,82,ja,"ポモージェ県",3337496
-...
+cat alternateNamesV2.txt | awk -F "\t" '{ if ( $3 == "sv" && $5 == "" ) print "HSET " $2 " " $3 " \"" $4 "\""}' | redis-cli
 ```
 
-If you want to preload those translations into some database for easier access
-you can use single database because geoname IDs are mutually exclusive between files.
-
-For example to feed translations into Redis:
+Then feed known, official names (fifth column is `1`):
 ```
-> HSET 798544 tr "Polonya"
-> HSET 798544 ki "Polandi"
-..
-> HSET 3099434 tr "Gdansk"
-> HSET 3099434 ru "Гданьск"
-...
-> HSET 3337496 ru "Поморское воеводство"
-> HSET 3337496 csb "Pòmòrsczé wòjewództwò"
-...
+cat alternateNamesV2.txt | awk -F "\t" '{ if ( $3 == "sv" && $5 == 1 ) print "HSET " $2 " " $3 " \"" $4 "\""}' | redis-cli
+```
+Sometimes official name will overwrite unofficial name.
+
+And to find translation of `geoname_id` in Swedish language you simply have to query Redis:
+```
+> HGET 798544 sv
+"Polen"
 ```
 
-And to find translation of geoname ID to specific language:
-```
-> HGET 3099434 ru
-"Гданьск"
-```
+You can feed more languages into the same database if you need.
 
 ## COPYRIGHTS
 
