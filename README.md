@@ -1,6 +1,6 @@
-# MaxMind GeoIP v2 libraries reader
+# MaxMind GeoIP v2 libraries reader for [Raku](https://www.raku.org) language
 
-[![Build Status](https://travis-ci.org/bbkr/GeoIP2.svg?branch=master)](https://travis-ci.org/bbkr/GeoIP2)
+![test](https://github.com/bbkr/GeoIP2/workflows/test/badge.svg)
 
 Reader for [MaxMind databases](https://www.maxmind.com/en/geoip2-databases) including:
 * Country
@@ -14,7 +14,7 @@ Reader for [MaxMind databases](https://www.maxmind.com/en/geoip2-databases) incl
 
 ## SYNOPSIS
 
-```perl6
+```raku
     use GeoIP2;
     
     my $geo = GeoIP2.new( path => '/home/me/Database.mmdb' );
@@ -51,7 +51,7 @@ IP can be given as:
 Note that returned data structure is specific for opened databse type,
 for example ISP database returns:
 
-```perl6
+```raku
 GeoIP2.new( path => './GeoIP2-ISP.mmdb' ).locate( ip => '78.31.153.58' );
 
 {
@@ -64,7 +64,7 @@ GeoIP2.new( path => './GeoIP2-ISP.mmdb' ).locate( ip => '78.31.153.58' );
 
 Sometimes returned values are localized, like in City database:
 
-```perl6
+```raku
 GeoIP2.new( path => './GeoIP2-City.mmdb' ).locate( ip => '78.31.153.58' );
 
 {
@@ -161,7 +161,7 @@ Geeky stuff.
 Helpful for investigating IP loation and data decoding issues.
 Can be passed in constructor or turned `True` / `False` at any time:
 
-```perl6
+```raku
 my $geo = GeoIP2.new( path => '/home/me/Database.mmdb', :debug );
 ...
 $geo.debug = False;
@@ -172,7 +172,7 @@ $geo.debug = True;
 
 ## REQUIREMENTS
 
-This is Pure Perl module - C maxminddb library is not required.
+This is Pure Raku module - maxminddb C library is **not** required.
 Here is how to start with free GeoIP Lite libraries right away:
 
 ### MacOS
@@ -186,7 +186,7 @@ In terminal:
 
 In code:
 
-```perl6
+```raku
 my $geo = GeoIP2.new( path => '/usr/local/var/GeoIP/GeoLite2-City.mmdb' );
 say $geo.locate( ip => '8.8.8.8' );
 ```
@@ -200,7 +200,7 @@ In terminal:
 
 In code:
 
-```perl6
+```raku
 my $geo = GeoIP2.new( path => '/var/lib/GeoIP/GeoLite2-City.mmdb' );
 say $geo.locate( ip => '8.8.8.8' );
 ```
@@ -213,7 +213,7 @@ In terminal:
 
 In code:
 
-```perl6
+```raku
 my $geo = GeoIP2.new( path => '/usr/share/GeoIP/GeoLite2-City.mmdb' );
 say $geo.locate( ip => '8.8.8.8' );
 ```

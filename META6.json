@@ -1,11 +1,11 @@
 {
-    "perl" : "6.c",
+    "perl" : "6.d",
     "name" : "GeoIP2",
-    "version" : "1.1.0",
+    "version" : "1.1.1",
     "description" : "MaxMind GeoIP v2 databases reader.",
     "authors" : [ "Paweł bbkr Pabian" ],
     "provides" : {
-        "GeoIP2" : "lib/GeoIP2.pm"
+        "GeoIP2" : "lib/GeoIP2.rakumod"
     },
     "license" : "Artistic-2.0",
     "source-url" : "git://github.com/bbkr/GeoIP2.git"

@@ -1,4 +1,4 @@
-unit class GeoIP2:auth<bbkr>:ver<1.1.0>;
+unit class GeoIP2:auth<github:bbkr>:ver<1.1.1>;
 
 # debug flag,
 # can be turned  on and off at any time
