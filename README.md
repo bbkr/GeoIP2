@@ -1,6 +1,6 @@
 # MaxMind GeoIP v2 libraries reader for [Raku](https://www.raku.org) language
 
-![test](https://github.com/bbkr/GeoIP2/workflows/test/badge.svg)
+[![.github/workflows/test.yml](https://github.com/bbkr/GeoIP2/actions/workflows/test.yml/badge.svg)](https://github.com/bbkr/GeoIP2/actions/workflows/test.yml)
 
 Reader for [MaxMind databases](https://www.maxmind.com/en/geoip2-databases) including:
 * Country
