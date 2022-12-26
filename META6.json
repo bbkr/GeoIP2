@@ -3,6 +3,7 @@
     "version" : "1.1.2",
     "description" : "MaxMind GeoIP v2 databases reader.",
     "authors" : [ "Paweł bbkr Pabian" ],
+    "auth": "zef:bbkr",
     "provides" : {
         "GeoIP2" : "lib/GeoIP2.rakumod"
     },
