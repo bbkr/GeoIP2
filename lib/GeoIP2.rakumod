@@ -144,12 +144,12 @@ method !read-metadata ( ) returns Hash {
         next unless $byte == 0xAB;
         
         # marker found, cursor will be positioned right after it
-        last if $!handle.read( $metadata-marker.elems ) == $metadata-marker;
+        last if $!handle.read( $metadata-marker.elems ) ~~ $metadata-marker;
         
         # marker not found, rewind cursor to previous position
         $!handle.seek( -$metadata-marker.elems, SeekFromCurrent );
     }
-    
+
     # decode metadata section into map structure
     return self!read-data( );
 }

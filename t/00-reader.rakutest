@@ -22,7 +22,7 @@ lives-ok { $geo = GeoIP2.new( path => './t/databases/MaxMind-DB-test-decoder.mmd
 
 subtest 'metadata' => sub {
     
-    plan 13;
+    plan 14;
     
     is $geo.binary-format-version, v2.0, 'binary format version';
     is $geo.build-timestamp.Str, '2015-07-15T17:38:55Z', 'build timestamp';
@@ -39,6 +39,8 @@ subtest 'metadata' => sub {
     is $geo.node-count, 395, 'node count';
     is $geo.record-size, 24, 'record size';
     is $geo.search-tree-size, 2370, 'search tree size';
+
+    lives-ok { GeoIP2.new( path => './t/databases/metadata-backtrack.mmdb' ) }, 'first encountered byte of separator is false positive';
 
 }
 
